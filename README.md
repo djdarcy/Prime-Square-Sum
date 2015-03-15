@@ -1,5 +1,5 @@
 # Prime-Square-Sum
-A brief notebook outlining the concept is available in the "Papers and Notes" folder: [Triangular Numbers and Squared Primes.nb](https://raw.githubusercontent.com/djdarcy/Prime-Square-Sum/master/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb). 
+There is a brief notebook that outlines the concept available in the "paper and notes" folder: [Triangular Numbers and Squared Primes.nb](https://raw.githubusercontent.com/djdarcy/Prime-Square-Sum/master/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb). 
 
 To view the notebook you will need a full version of Mathematica or the [CDF Player](http://www.wolfram.com/cdf-player/).
 
