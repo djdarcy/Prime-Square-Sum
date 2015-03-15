@@ -5,13 +5,17 @@ To view the notebook you will need a full version of Mathematica or the [CDF Pla
 
 The python program squares primes and sums them together to determine if:
 
-`stf(b,z) = sum_(x=1)^z tf(b, z, x)` 
+```
+tf(b,z) = t(b, qg(b), z)
+stf(b) = sum_(x=1)^z t(b, qg(b), x)
+```
 
 is equal to the series of squared primes.
 
 ```
-b = triangular number (also the number base);        //equal to: (z^2+z)/2 
-z = size of the base row of the triangular number;   //equal to: 1/2(-1+sqrt(1+8b)
+b = triangular number (also the number base);              //equal to: (z^2+z)/2 
+r = qg(b) = size of the base row of the triangular number; //equal to: 1/2(-1+sqrt(1+8b)
+z = row in the triangular number;  //ex. tf(10,4)=0123; tf(10,3)=456; tf(10,2)=78, etc.)
 ```
 
 Where tf() is defined to be:
