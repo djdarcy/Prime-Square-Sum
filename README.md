@@ -9,8 +9,8 @@ The program squares primes and sums them together to determine if:
 is equal to the series of squared primes.
 
 ```
-b = triangular number (also the number base);        //equal to: 1/2(-1+sqrt(1+8z)
-z = size of the base row of the triangular number;   //equal to: (b^2+b)/2 
+b = triangular number (also the number base);        //equal to: (z^2+z)/2 
+z = size of the base row of the triangular number;   //equal to: 1/2(-1+sqrt(1+8b)
 ```
 
 Where tf() is defined to be:
