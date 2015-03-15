@@ -17,7 +17,7 @@ Where tf() is defined to be:
 
 ![tf(b,z,x) = (-2 + 2b - 2b^2 + z - bz - z^2 + bz^2 + b^z(2 + 2b^2 + z + z^2 - b(2 + z + z^2))) / (2(-1 + b)^2)](/paper%20and%20notes/function-tf-defined.png?raw=true "tf defined")
 
-There is an interesting relationship when `{b=10, z=4}` where the sum of the rows in base-10 happens to work out to be the sum of squared primes.
+There is an interesting relationship when `{b=10, z=4}` where the sum of the rows in base-10, `0123 + 456 + 78 + 9`, happens to work out to be the sum of squared primes.
 
 ```
 stf(10,4) = 2² + 3² + 5² + 7² + 11² + 13² + 17² = 666
