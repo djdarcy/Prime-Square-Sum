@@ -13,7 +13,7 @@ is equal to the series of squared primes.
 
 ```
 b = triangular number (also the number base);              //equal to: (z^2+z)/2 
-r = qg(b) = size of the base row of the triangular number; //equal to: qg(b) = 1/2(-1+sqrt(1+8b)
+r = qg(b) = size of the base row of the triangular number; //qg(b) = 1/2(-1+sqrt(1+8b)
 z = row in the triangular number;  //ex. tf(10,4)=0123; tf(10,3)=456; tf(10,2)=78, etc.)
 ```
 
