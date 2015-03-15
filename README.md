@@ -1,19 +1,20 @@
 # Prime-Square-Sum
-A brief paper outlining the concept is available at: [Triangular Numbers and Squared Primes.nb](/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)
+A brief paper outlining the concept is available at: [Triangular Numbers and Squared Primes.nb](https://raw.githubusercontent.com/djdarcy/Prime-Square-Sum/master/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)
 
 
-The program squares primes and sums them together to determine if `stf(b,n) = sum_(x=1)^n tf(b, n, x)` is equal to the series of squared primes.
+The program squares primes and sums them together to determine if `stf(b,z) = sum_(x=1)^z tf(b, z, x)` is equal to the series of squared primes.
 
 ```
-b = number of elements in the triangular number; //equal to: 1/2(-1+sqrt(1+8n)
-n = triangular number;                           //equal to: (b^2+b)/2 
-tf(b,n,x) = (-2 + 2b - 2b^2 + n - bn - n^2 + bn^2 + b^n(2 + 2b^2 + n + n^2 - b(2 + n + n^2))) / (2(-1 + b)^2)
+b = number of elements in the triangular number; //equal to: 1/2(-1+sqrt(1+8z)
+z = triangular number;                           //equal to: (b^2+b)/2 
+tf(b,z,x) = (-2 + 2b - 2b^2 + z - bz - z^2 + bz^2 + b^z(2 + 2b^2 + z + z^2 - b(2 + z + z^2))) / (2(-1 + b)^2)
 ```
 
 For better readability,
+
 ![...](/paper%20and%20notes/function-tf-defined.png?raw=true "tf defined")
 
-There is an interesting relationship when `{b=10, n=4}` where the sum of the rows in base-10 happens to work out to be the sum of squared primes.
+There is an interesting relationship when `{b=10, z=4}` where the sum of the rows in base-10 happens to work out to be the sum of squared primes.
 
 ```
 stf(10,4) = 2² + 3² + 5² + 7² + 11² + 13² + 17² = 666
