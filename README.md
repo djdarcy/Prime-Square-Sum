@@ -1,8 +1,9 @@
 # Prime-Square-Sum
-A brief paper outlining the concept is available at: [Triangular Numbers and Squared Primes.nb](https://raw.githubusercontent.com/djdarcy/Prime-Square-Sum/master/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)
+A brief notebook outlining the concept is available in the "Papers and Notes" folder: [Triangular Numbers and Squared Primes.nb](https://raw.githubusercontent.com/djdarcy/Prime-Square-Sum/master/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb). 
 
+To view the notebook you will need a full version of Mathematica or the [CDF Player](http://www.wolfram.com/cdf-player/).
 
-The program squares primes and sums them together to determine if:
+The python program squares primes and sums them together to determine if:
 
 `stf(b,z) = sum_(x=1)^z tf(b, z, x)` 
 
