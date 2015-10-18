@@ -5,9 +5,7 @@ To view the notebook you will need a full version of Mathematica or the [CDF Pla
 
 The python program squares primes and sums them together to determine if:
 
-```
-stf(b) = sum_(z=1)^qg(b) tf(b,z);
-```
+![stf(b) = sum_(z=1)^qg(b) tf(b,z);](/paper%20and%20notes/function-stf-defined.png?raw=true "stf defined")
 
 is equal to the series of squared primes.
 
