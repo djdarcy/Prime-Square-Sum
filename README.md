@@ -25,7 +25,7 @@ There is an interesting relationship when `{b=10, r=4}` where the sum of the row
 stf(10) = 2² + 3² + 5² + 7² + 11² + 13² + 17² = 666
 ```
 
-What I find fascinating about this relationship is the resultant value 666 is a triangular number itself. So the question then is if we were able to sum the rows of a 666 element triangle with 36 rows in base-666 would the result _also_ be the sum of squared primes?
+What I find fascinating about this relationship is the resultant value 666 is a triangular number itself. So the question then is if we were able to sum the rows of a 666 element triangle with 36 rows in base-666 would the result _also_ be the sum of squared or cubed primes?
 
 This program attempts to provide an answer. The base-10 number from `stf(666)` is massively large unfortunately at 98 digits:
 
