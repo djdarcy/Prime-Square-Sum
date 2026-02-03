@@ -51,37 +51,27 @@ python prime-square-sum.py --resume checkpoint.json
 
 ## Installation
 
-### Quick Start (CPU only)
-```bash
-pip install numpy
-```
+### Recommended: Conda
 
-### Full Setup with GPU Acceleration (Recommended)
+Conda handles C++ dependencies and provides pre-built binaries for all platforms:
 
 ```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate (Windows)
-venv\Scripts\activate
-
-# Activate (Linux/Mac)
-source venv/bin/activate
+# Create and activate environment
+conda create -n prime-square-sum python=3.12
+conda activate prime-square-sum
 
 # Install dependencies
-pip install -r requirements.txt
+conda install -c conda-forge numpy primesieve cupy-cuda12x
 ```
 
-The `requirements.txt` includes:
+This installs:
 - `numpy` - Array operations
+- `primesieve` - Fast prime generation (C++ library, pre-compiled)
 - `cupy-cuda12x` - GPU acceleration (requires NVIDIA GPU + CUDA 12.x)
 
-### Optional: Faster Prime Generation
+### Other Installation Methods
 
-```bash
-pip install primesieve  # Linux/Mac
-conda install -c conda-forge primesieve  # Windows
-```
+For venv, pip, Docker, GPU setup, and detailed troubleshooting, see [docs/install.md](docs/install.md).
 
 ### Verify GPU Setup
 
