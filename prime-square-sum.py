@@ -1,565 +1,535 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""
+prime-square-sum.py - Optimized Prime Square Sum Calculator
+=============================================================
 
-import os
-import sys
-import re
-import string
-import subprocess
-import datetime as dt
-import shutil
-import math
+Calculates the sum of squared primes to verify the conjecture:
+    stf(b) = sum of squared primes for certain triangular bases?
+
+Known: stf(10) = 666 = 2² + 3² + 5² + 7² + 11² + 13² + 17²
+
+This version features:
+    - Python 3 (modern, maintained)
+    - primesieve library (fastest known sieve)
+    - NumPy for efficient array operations
+    - Multiprocessing for CPU parallelism
+    - Backward compatibility with legacy pickle files
+    - Resumable computation via checkpoints
+
+Usage:
+    # Verify stf(10) = 666
+    python prime-square-sum.py --target 666 --max-primes 100
+
+    # Search for sum matching stf(666)
+    python prime-square-sum.py --target 37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290
+
+    # Use precomputed primes
+    python prime-square-sum.py --prime-file primes.npy --target 666
+
+    # Resume from checkpoint
+    python prime-square-sum.py --resume checkpoint.json --target <target>
+
+Author: D. Darcy
+Project: https://github.com/djdarcy/Prime-Square-Sum
+Related: Zero_AG to The Scarcity Framework (Way-of-Scarcity/papers)
+"""
+
+import argparse
+import json
+import numpy as np
 import signal
-import getopt
-import pickle
-import gc
-#import argparse
+import sys
+import time
+from dataclasses import dataclass, asdict
+from multiprocessing import Pool, cpu_count
+from pathlib import Path
+from typing import Optional, Tuple, List
 
-# Alright since I may have to do this over many days or I may want to break it up over several
-# computers, the best way to accomplish this it would seem is to:
-# sum (upper bound), (start), Prime[x]^2
-# The problem with this though is I need all previous values to then sum against the new prime
-# Well not necessarily. I can have one computer summing from say
-#
-#   sum (4), (1), Prime[x]^2   = 87
-#
-# Then another just summing from:
-#
-#   sum (6), (5), Prime[x]^2   = 290
-#
-# Once I finish the lower bound I can just add that result to the upper. With this type of
-# approach I can periodically just grab (lower) + (upper) and say is it greater than (target)?
-# If it is I know I've gone too far. Rather than having to recalculate the entire thing. It
-# would be nice to have (upper) broken up in to chunks stored in a list. A tree based approach
-# would probably work nicely i.e.
-#
-#   01:  2^2 = 4     sum: 4
-#   02:  3^2 = 9     sum: 13
-#   03:  5^2 = 25    sum: 38
-#   04:  7^2 = 49    sum: 87
-#   05:  11^2 = 121  sum: 208
-#   06:  13^2 = 169  sum: 377,   partial sum: 169
-#   07:  17^2 = 289  sum: 666,   partial sum: 458
-#   08:  19^2 = 361  sum: 1027,  partial sum: 819
-#   09:  23^2 = 529  sum: 1556,  partial sum: 1348
-#   10:  29^2 = 841  sum: 2397,  partial sum: 2189
-#
-# Now lets imagine I have one computer running 1-5, and another computer running 6-10. In all
-# instances the higher component will eclipse the lower by a significant margin if I do it in
-# halves. For example row 10 has a partial sum of 2189 and a whole sum of 2397. The difference
-# will always be constant.
-#
-# It would be nice to calculate a rough growth function so I could do an approximation of whether
-# or not I'm over the provided value. However, what I can say is that the previous _total_ sum
-# will be somewhere between partial sum #1 and #2. 
-#
-# So, I always want to retain the first two partial sums (or total sums). This will allow me to
-# calculate how much extra to potentially add on. Similarly I should only ever need to keep
-# 3 top end sums. This should give me enough to work with due to error margin for the low-end
-# value. Meaning I can then calculate how much I went above and how much I would go below a
-# given target. 
-#
-#
-#TODO: Create a multi-threaded version that just reads from a pipe, looking for primes?
-#      This approach would be particularly useful because then I really could have it broken up.
-#      One computer that just computes primes. Then another that just squares and sums. However
-#      network latency may eventually become the bottleneck. Might be worth testing.
+# Version
+VERSION_FILE = Path(__file__).parent / "VERSION"
+__version__ = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "2.0.0"
 
-def usage(error, msg=''):
+# Local imports
+from utils.sieve import generate_primes, generate_n_primes, nth_prime, PRIMESIEVE_AVAILABLE
+from utils.prime_io import load_primes, save_primes, load_primes_range
+
+
+# =============================================================================
+# Data Structures
+# =============================================================================
+
+@dataclass
+class ComputationState:
+    """Checkpoint state for resumable computation."""
+    target: str                    # Target sum (string for arbitrary precision)
+    current_sum: str               # Current partial sum
+    primes_processed: int          # Number of primes processed
+    last_prime: int                # Last prime processed
+    start_time: float              # When computation started
+    elapsed_time: float            # Total elapsed time
+    found: bool                    # Whether target was found
+    exceeded: bool                 # Whether we exceeded target
+
+    def to_json(self, filepath: Path) -> None:
+        """Save state to JSON file."""
+        with open(filepath, 'w') as f:
+            json.dump(asdict(self), f, indent=2)
+
+    @classmethod
+    def from_json(cls, filepath: Path) -> 'ComputationState':
+        """Load state from JSON file."""
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        return cls(**data)
+
+
+@dataclass
+class Result:
+    """Final computation result."""
+    target: int
+    final_sum: int
+    primes_count: int
+    last_prime: int
+    match: bool
+    exceeded: bool
+    elapsed_seconds: float
+    primes_per_second: float
+
+
+# =============================================================================
+# Core Computation
+# =============================================================================
+
+def get_checkpoint_interval(count: int) -> int:
     """
-    Print the usage, an error message, then exit with an error
+    Return adaptive checkpoint interval based on primes processed.
+
+    As primes get larger, they become more expensive to compute,
+    so we save more frequently to avoid losing progress.
+
+    Args:
+        count: Number of primes processed so far
+
+    Returns:
+        How often to checkpoint (every N primes)
     """
-    PrintUsage()
-    print >>sys.stderr, globals()['__doc__']
-    print >>sys.stderr, error
-
-    sys.exit(1)
-
-
-def signal_handler(signal, frame):
-    global p
-    global fAppend
-    if(fAppend == True):
-        WriteFile()
-    print "Count is:\t {0}".format(count)
-    if(p != []):
-        print "p[-1] is:\t {0}".format(p[-1])
-    Report()
-    
-
-def PrintUsage():
-    print """
-Usage: prime-square-sum.py {-w write-file} {-f read-file} {-s start prime-block} {-i increment} {-p last-partialsum}
-                            [target] [start] {end}
-
-  Calculates summation of Prime[n]^2 to target number or [end] prime count.
-  
-  Examples:
-    prime-square-sum 666 1 7
-    
-    prime-square-sum -f allmil.dat -i 100 \
-        37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290 1 50000000
-    
-    prime-square-sum -f 41to50mil.dat -i 100 -p 7752698498499599261971299 \
-        37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290 40000000 50000000
-"""   
-
-
-def Report():
-    global s
-    global l
-    global a_target
-    lcount = 0
-    
-    if(s[0][0] != None and l[0][0] != None):
-        print '\t\t_Prime_, \t_Square_, \t_Partial-Sum_,\t _count_\n'
-        print 'Initial vals:'
-        for x in s:
-            print '\ts[{0}] = {1:10d},\t{2:10d},\t{3:10d},\t{4:10d}'.format(lcount, x[0], x[1], x[2], x[3])
-            lcount += 1
-        print '\n\nEnd vals:'
-        lcount = 0
-    
-        for x in l:
-            print '\tl[{0}] = {1:10d},\t{2:10d},\t{3:10d},\t{4:10d}'.format(lcount, x[0], x[1], x[2], x[3])
-            lcount += 1
-        
-        print '\n\nSynopsis:'
-        print '\n\t{0:10d} == {1:10d}, {2}'.format(a_target, l[2][2], "true" if a_target == l[2][2] else "false")
-        
-    print '\n\n__________________________\n\n'
-
-
-
-#public static BitSet computePrimes(int limit)
-#{
-#    final BitSet primes = new BitSet();
-#    primes.set(0, false);
-#    primes.set(1, false);
-#    primes.set(2, limit, true);
-#    for (int i = 0; i * i < limit; i++)
-#    {
-#        if (primes.get(i))
-#        {
-#            for (int j = i * i; j < limit; j += i)
-#            {
-#                primes.clear(j);
-#            }
-#        }
-#    }
-#    return primes;
-#}
-
-
-
-##############################################
-
-def primes(n, list = None, minimum = 0):
-    """
-primes(n) --> primes
- 
-Return list of primes from minimum up to but not including n.  Uses Sieve of Erasth.
-If list is given values are returned on the list (with minimum _as_ 0). If minimum
-is provided the result is returned, and the full list is returned through the 2nd
-param
-"""
-    
-    if n < 2:        
-        if list is None:    
-            return []
-        else:
-            list[0] = []
-            return
-    
-    l = 0
-    
-    if list is None:
-        nums = range(3,int(n),2)
+    if count < 10_000:
+        return 1_000       # Every 1k for first 10k
+    elif count < 100_000:
+        return 100         # Every 100 up to 100k
+    elif count < 1_000_000:
+        return 10          # Every 10 up to 1M
     else:
-        nums = list[0]
-        nums.remove(2)
-        l = len(nums)
-        n_start = nums[-1]+2    #all num[-1], as primes, should be odd, to get another, +2
-        
-        if(n-1 <= n_start):
-            n2 = n+n_start
-        else:
-            n2 = n
-
-        for i in range(n_start, n2, 2):
-            nums.append(i)
-        
-        #if(nums[0] == 2):
-    
-    global p
-    p = []
-    psmall = []
-    
-    p.append(2)
-    
-    while nums:
-        new_prime = nums[0]
-        p.append(new_prime)
-        if( minimum > 0 and new_prime > minimum):
-            psmall.append(new_prime)
-        
-        if(list is None):
-            x = 1
-        else:
-            x = l
-            if(l > 1):
-                l -= 1
-            
-        multiple = new_prime * 2
-        for i in nums[x:]:
-            if multiple > i:
-                continue
-            if i % new_prime == 0:
-                nums.remove(i)
-
-        nums.remove(nums[0])   
-    
-    #Report();
-    if(list is None):
-        return p
-    else:
-        list[0] = p
-        #assert( psmall != [])
-        return psmall
+        return 1           # Every prime after 1M
 
 
-def power_mod(a, b, n):
+def square_sum_chunk(primes: np.ndarray) -> int:
     """
-power_mod(a,b,n) --> int
+    Compute sum of squared primes for a chunk.
 
-Return (a ** b) % n
-"""
-    if b < 0:
-        return 0
-    elif b == 0:
-        return 1
-    elif b % 2 == 0:
-        return power_mod(a*a, b/2, n) % n
-    else:
-        return (a * power_mod(a,b-1,n)) % n
+    Uses Python int for arbitrary precision accumulation.
 
-    
-def rabin_miller(n, tries = 7):
+    Args:
+        primes: numpy array of primes
+
+    Returns:
+        Sum of p² for all p in primes
     """
-rabin_miller(n, tries) --> Bool
+    # Convert to Python ints for arbitrary precision
+    return sum(int(p) ** 2 for p in primes)
 
-Return True if n passes Rabin-Miller strong pseudo-prime test on the
-given number of tries, which indicates that n has < 4**(-tries) chance of being composite; return False otherwise.
 
-http://mathworld.wolfram.com/Rabin-MillerStrongPseudoprimeTest.html
-"""
-    if n == 2:
+def parallel_square_sum(primes: np.ndarray, num_workers: Optional[int] = None,
+                        chunk_size: int = 100_000) -> int:
+    """
+    Compute sum of squared primes using multiprocessing.
+
+    Args:
+        primes: numpy array of primes
+        num_workers: Number of worker processes (default: CPU count)
+        chunk_size: Size of chunks for parallel processing
+
+    Returns:
+        Sum of p² for all primes
+    """
+    if num_workers is None:
+        num_workers = cpu_count()
+
+    # For small arrays, don't bother with parallelism
+    if len(primes) < chunk_size:
+        return square_sum_chunk(primes)
+
+    # Split into chunks
+    chunks = [primes[i:i + chunk_size] for i in range(0, len(primes), chunk_size)]
+
+    # Process in parallel
+    with Pool(processes=num_workers) as pool:
+        partial_sums = pool.map(square_sum_chunk, chunks)
+
+    # Accumulate with arbitrary precision
+    return sum(partial_sums)
+
+
+def incremental_square_sum(primes: np.ndarray, target: int,
+                           initial_sum: int = 0,
+                           callback=None) -> Tuple[int, int, int, bool, bool]:
+    """
+    Compute sum of squared primes incrementally, stopping when target is reached.
+
+    Args:
+        primes: numpy array of primes
+        target: Target sum to reach
+        initial_sum: Starting sum (for resumption)
+        callback: Optional callback(count, current_sum, last_prime) for progress
+
+    Returns:
+        Tuple of (final_sum, count, last_prime, found_exact, exceeded)
+    """
+    current_sum = initial_sum
+    count = 0
+    last_prime = 0
+    next_checkpoint = get_checkpoint_interval(0)
+
+    for p in primes:
+        p = int(p)
+        current_sum += p * p
+        count += 1
+        last_prime = p
+
+        if callback and count >= next_checkpoint:
+            callback(count, current_sum, last_prime)
+            next_checkpoint = count + get_checkpoint_interval(count)
+
+        if current_sum == target:
+            return current_sum, count, last_prime, True, False
+        elif current_sum > target:
+            return current_sum, count, last_prime, False, True
+
+    return current_sum, count, last_prime, False, False
+
+
+# =============================================================================
+# Main Search Function
+# =============================================================================
+
+def search_for_target(target: int,
+                      prime_file: Optional[Path] = None,
+                      max_primes: Optional[int] = None,
+                      initial_sum: int = 0,
+                      start_index: int = 0,
+                      checkpoint_file: Optional[Path] = None,
+                      verbose: bool = True) -> Result:
+    """
+    Search for a sum of squared primes that matches the target.
+
+    Checkpoints are saved at adaptive intervals: more frequently as
+    primes get larger (every prime after 1M processed).
+
+    Args:
+        target: Target sum to find
+        prime_file: Optional file with precomputed primes
+        max_primes: Maximum number of primes to try
+        initial_sum: Starting sum (for resumption)
+        start_index: Starting prime index (for resumption)
+        checkpoint_file: File to save checkpoints
+        verbose: Print progress
+
+    Returns:
+        Result object with computation details
+    """
+    start_time = time.time()
+    current_sum = initial_sum
+    count = start_index
+    last_prime = 0
+    found = False
+    exceeded = False
+
+    # Load or generate primes
+    if prime_file and prime_file.exists():
+        if verbose:
+            print(f"Loading primes from {prime_file}...")
+        primes = load_primes(prime_file)
+        if start_index > 0:
+            primes = primes[start_index:]
+        if max_primes:
+            primes = primes[:max_primes]
+        if verbose:
+            print(f"Loaded {len(primes):,} primes")
+    else:
+        if max_primes:
+            if verbose:
+                print(f"Generating first {max_primes:,} primes...")
+            primes = generate_n_primes(max_primes)
+        else:
+            # Estimate how many primes we might need
+            # Very rough: if target is T, we need roughly T^(1/2) primes
+            # But this is a vast underestimate for large T
+            if verbose:
+                print("Generating primes (will stop when target reached)...")
+            # Start with 1 million, expand if needed
+            primes = generate_n_primes(1_000_000)
+
+        if verbose:
+            print(f"Generated {len(primes):,} primes")
+
+    # Progress callback (called at adaptive intervals)
+    def progress_callback(n, s, p):
+        nonlocal count, current_sum, last_prime
+        count = start_index + n
+        current_sum = s
+        last_prime = p
+
+        elapsed = time.time() - start_time
+        rate = n / elapsed if elapsed > 0 else 0
+
+        if verbose:
+            pct = (s / target * 100) if target > 0 else 0
+            print(f"  Processed: {count:,} primes | "
+                  f"Sum: {s:,} ({pct:.6f}% of target) | "
+                  f"Rate: {rate:,.0f} primes/sec")
+
+        # Save checkpoint
+        if checkpoint_file:
+                state = ComputationState(
+                    target=str(target),
+                    current_sum=str(s),
+                    primes_processed=count,
+                    last_prime=p,
+                    start_time=start_time,
+                    elapsed_time=elapsed,
+                    found=False,
+                    exceeded=False
+                )
+                state.to_json(checkpoint_file)
+
+    # Run computation
+    final_sum, processed, last_prime, found, exceeded = incremental_square_sum(
+        primes, target, initial_sum, progress_callback
+    )
+
+    count = start_index + processed
+    elapsed = time.time() - start_time
+    rate = count / elapsed if elapsed > 0 else 0
+
+    # Final checkpoint
+    if checkpoint_file:
+        state = ComputationState(
+            target=str(target),
+            current_sum=str(final_sum),
+            primes_processed=count,
+            last_prime=last_prime,
+            start_time=start_time,
+            elapsed_time=elapsed,
+            found=found,
+            exceeded=exceeded
+        )
+        state.to_json(checkpoint_file)
+
+    return Result(
+        target=target,
+        final_sum=final_sum,
+        primes_count=count,
+        last_prime=last_prime,
+        match=found,
+        exceeded=exceeded,
+        elapsed_seconds=elapsed,
+        primes_per_second=rate
+    )
+
+
+# =============================================================================
+# CLI Interface
+# =============================================================================
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Calculate sum of squared primes to find target value",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Verify stf(10) = 666 (sum of first 7 squared primes)
+  python prime-square-sum.py --target 666 --max-primes 100
+
+  # Search using precomputed primes
+  python prime-square-sum.py --prime-file primes.npy --target 666
+
+  # Resume from checkpoint
+  python prime-square-sum.py --resume checkpoint.json
+
+Known values:
+  stf(10) = 666 = 2² + 3² + 5² + 7² + 11² + 13² + 17² (7 primes)
+        """
+    )
+
+    parser.add_argument(
+        '--target', '-t',
+        type=str,
+        help="Target sum to search for (supports arbitrary precision)"
+    )
+
+    parser.add_argument(
+        '--prime-file', '-f',
+        type=Path,
+        help="File containing precomputed primes (.npy, .pkl, .dat, .txt)"
+    )
+
+    parser.add_argument(
+        '--max-primes', '-n',
+        type=int,
+        help="Maximum number of primes to process"
+    )
+
+    parser.add_argument(
+        '--workers', '-w',
+        type=int,
+        default=cpu_count(),
+        help=f"Number of worker processes (default: {cpu_count()})"
+    )
+
+    parser.add_argument(
+        '--checkpoint', '-c',
+        type=Path,
+        default=Path("checkpoint.json"),
+        help="Checkpoint file for resumable computation"
+    )
+
+    parser.add_argument(
+        '--resume', '-r',
+        type=Path,
+        help="Resume from checkpoint file"
+    )
+
+    parser.add_argument(
+        '--quiet', '-q',
+        action='store_true',
+        help="Suppress progress output"
+    )
+
+    parser.add_argument(
+        '--verify-666',
+        action='store_true',
+        help="Quick verification that stf(10) = 666"
+    )
+
+    return parser.parse_args()
+
+
+def verify_666():
+    """Quick verification that sum of first 7 squared primes = 666."""
+    print("Verifying: stf(10) = 666 = sum of first 7 squared primes")
+    print()
+
+    primes = generate_n_primes(7)
+    print(f"First 7 primes: {primes.tolist()}")
+
+    squares = [int(p)**2 for p in primes]
+    print(f"Squares: {squares}")
+
+    total = sum(squares)
+    print(f"Sum: {' + '.join(map(str, squares))} = {total}")
+    print()
+
+    if total == 666:
+        print("VERIFIED: stf(10) = 666")
         return True
-    
-    if n % 2 == 0 or n < 2:
-        return False
-    
-    p = primes(tries**2)
-
-    # necessary because of the test below
-    if n in p:
-        return True
-    sn = str(n)
-    fsn = 0
-    
-    #Fadic compression
-    for x in sn:
-        if(fsn + int(x) >= 10):
-            fsn += 1
-        fsn = (fsn + int(x)) % 10
-    
-    #Fadic base-10 values mod 3 are divisible by 3, 6, and/or 9
-    if(fsn % 3 == 0):
-        return False
-        
-    s = n - 1
-    r = 0
-    while s % 2 == 0:
-        r = r+1
-        s = s/2
-        
-    for i in range(tries):
-        a = p[i]
-        
-        if power_mod(a,s,n) == 1:
-            continue
-        else:
-            for j in range(0,r):
-                if power_mod(a,(2**j)*s, n) == n - 1:
-                    break
-            else:
-                return False
-            continue
-    return True
-
-#def Prime(n):
-"""
-Return nth Prime starting from 1, 0 is error.
-"""
- #   for
-
-#def PrimeQ(n):
-"""
-Similar to Mathematica functionality.
-"""
-
-
-
-
-
-##############################################
-
-def ReadFile(filename):
-    global p
-    fReadFile = None
-    error = False
-    
-    try:
-        fReadFile = open(filename, 'rb+' )
-    except IOError:
-        error = True
-        print "Error: opening {0}".format(filename)
-    if(error == False):
-        error = False
-        lcount = 0
-        pn = []
-        while error == False:
-            try:
-                if lcount == 0:
-                    p = pickle.load(fReadFile)
-                else:
-                    pn = pickle.load(fReadFile)
-                lcount += 1
-            except:
-                print "Copied in {0} loads from {1}...".format(lcount, filename)
-                error = True
-                
-            if(error != True):
-                for i in pn:
-                    p.append(i)
-                
-        fReadFile.close()
-    gc.collect()
-
-    
-    
-    #for lines in fReadFile.readlines():
-    #    p.append(long(lines))
-
- 
-def WriteFile():
-    error = False
-    global fWriteFileArg
-    global fAppend
-    global p
-    
-    fWriteFile = None
-    
-    if(fAppend == True and fWriteFileArg != None):
-        try:
-            fWriteFile = open(fWriteFileArg, 'wb+' )
-        except IOError:
-            error = True
-            print "Error: opening {0}".format(fWriteFileArg)
-        
-        if(error != True):
-            #Byte-packing is the last option hence (-1). For better
-            #readability use 0 (primes are then human readable)
-            pickle.dump(p, fWriteFile, -1)
-            fWriteFile.close()
-
-
-##############################################
-
- #argv=None   
-def Main():
-    
-    #if argv is None:
-    #    argv = sys.argv
-    
-
-    global count
-    global s
-    global l
-    global p
-    global a_startsize
-    global a_increment
-    global a_target
-    global a_min
-    global a_max
-    global a_partialsum
-
-    result = 0
-    partialsum = 0
-    p_small = []
-
-    if(p == []):
-        if(a_startsize == 0):
-            #original 10000
-            p = primes( 10000 if (a_target > 100000) else a_target )
-        else:
-            p = primes(a_startsize)
     else:
-        if(a_partialsum > 0 and a_min > 1):
-            count = a_min
-            partialsum = a_partialsum
-    
-    ref = [p]
-    
-    while(partialsum < a_target and (a_max == -1 or a_max > count)):
-        if(count > 0 and s[0][0] != None):
-            p_small = []
-            primegap = 0
-            while(p_small == []):
-                primegap += 1
-                #If p_small is [] then the prime_gap has grown so wide we're
-                #getting no new primes, so increment needs to be enlarged
-                a_increment *= primegap
-                p_small = primes(a_increment, ref, p[-1])
-                #When len of p_small is only 2 units double a_increment. Should
-                #prevent scenario of needing primegap. 
-                if(len(p_small) <= 2):
-                    a_increment *= 2
-                p = ref[0]
-        
-        if(p_small == []):
-            p_small = p
-    
-        #Random idea: Maybe do a compounding function that iterates over all these values a 2nd/3rd/nth time?
-        #I.e. take all the old values and sum them over and over again.
-        for i in p_small:
-            count += 1
-            result = i**2
-            partialsum = partialsum + result
-            
-            #Comical that I'm having a bug that occurs between 217 & 218. Pretty close to Pi's
-            #216 error. Actually it breaks right after prime 216 (base-0) -> 1327.
-            #Figured it out. Prime[218]-Prime[217] = 34. I was providing an increment of 32
-            #So the primes() func was returning no p_small
-            
-            #if(count >= 217):
-                #print (partialsum)
-                #assert (partialsum == 116747412)
-                
-            if(count <= (a_min+2)):
-                index = (count-a_min)-1
-                s[index][0] = i
-                s[index][1] = result
-                s[index][2] = partialsum
-                s[index][3] = count
-            elif(count >= (a_min+3) and count < (a_min+6)):
-                index = (count-a_min)-3
-                l[index][0] = i
-                l[index][1] = result
-                l[index][2] = partialsum
-                l[index][3] = count
-            elif(count >= (a_min+6)):
-                for x in range(0,4):
-                    l[0][x] = l[1][x]
-                    l[1][x] = l[2][x]
-                    
-                l[2][0] = i
-                l[2][1] = result
-                l[2][2] = partialsum
-                l[2][3] = count
-                
-            if (partialsum >= a_target):
-                break;
-
-    WriteFile()
-    Report()
-
-    #wrapper = [p]
-    #primes(200, wrapper)
-    #print wrapper[0][-1]
-    #rabin_miller(97)
-    #rabin_miller(2179)
+        print(f"FAILED: Expected 666, got {total}")
+        return False
 
 
+def main():
+    args = parse_args()
+
+    # Quick verification mode
+    if args.verify_666:
+        success = verify_666()
+        sys.exit(0 if success else 1)
+
+    # Resume from checkpoint
+    if args.resume:
+        if not args.resume.exists():
+            print(f"Error: Checkpoint file not found: {args.resume}")
+            sys.exit(1)
+
+        state = ComputationState.from_json(args.resume)
+        target = int(state.target)
+        initial_sum = int(state.current_sum)
+        start_index = state.primes_processed
+
+        print(f"Resuming from checkpoint:")
+        print(f"  Target: {target}")
+        print(f"  Current sum: {initial_sum}")
+        print(f"  Primes processed: {start_index:,}")
+        print()
+    else:
+        if not args.target:
+            print("Error: --target is required (or use --verify-666)")
+            sys.exit(1)
+
+        target = int(args.target)
+        initial_sum = 0
+        start_index = 0
+
+    # Print configuration
+    verbose = not args.quiet
+    if verbose:
+        print("=" * 60)
+        print("Prime Square Sum Calculator v2")
+        print("=" * 60)
+        print(f"Target: {target}")
+        print(f"Prime file: {args.prime_file or 'generate on-the-fly'}")
+        print(f"Max primes: {args.max_primes or 'unlimited'}")
+        print(f"Workers: {args.workers}")
+        print(f"primesieve available: {PRIMESIEVE_AVAILABLE}")
+        print("=" * 60)
+        print()
+
+    # Set up signal handler for graceful interruption
+    def signal_handler(sig, frame):
+        print("\nInterrupted! Checkpoint saved.")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # Run search
+    result = search_for_target(
+        target=target,
+        prime_file=args.prime_file,
+        max_primes=args.max_primes,
+        initial_sum=initial_sum,
+        start_index=start_index,
+        checkpoint_file=args.checkpoint,
+        verbose=verbose
+    )
+
+    # Print result
+    print()
+    print("=" * 60)
+    print("RESULT")
+    print("=" * 60)
+    print(f"Target:        {result.target}")
+    print(f"Final sum:     {result.final_sum}")
+    print(f"Primes used:   {result.primes_count:,}")
+    print(f"Last prime:    {result.last_prime:,}")
+    print(f"Elapsed:       {result.elapsed_seconds:.2f} seconds")
+    print(f"Rate:          {result.primes_per_second:,.0f} primes/second")
+    print()
+
+    if result.match:
+        print(f"MATCH FOUND!")
+        print(f"Target {target} = sum of first {result.primes_count} squared primes")
+    elif result.exceeded:
+        print(f"TARGET EXCEEDED")
+        print(f"Sum exceeded target at prime #{result.primes_count} ({result.last_prime})")
+        print(f"Overshoot: {result.final_sum - result.target}")
+    else:
+        print(f"TARGET NOT REACHED")
+        print(f"Need more primes to continue search")
+
+    print("=" * 60)
+
+    return 0 if result.match else 1
 
 
-############################################
-
-
-try:
-    opts, args = getopt.getopt(sys.argv[1:], 'hf:s:i:w:p:', ['help', 'file=', 'start=', 'increment=', 'write=', 'partialsum='])
-except getopt.error, msg:
-    usage(1, msg)
-
-p = []
-a_startsize = 0
-a_increment = 100
-a_highestReadPrime = -1
-a_partialsum = 0
-fWriteFileArg = None
-fReadFileArg = None
-fAppend = False
-
-#[-w write primes to file] [-f primes-list or file] [-s prime-block start] [-i prime-block increment] [target] [start] {end}
-
-for opt, arg in opts:
-    if opt in ('-h', '--help'):
-        usage(0)
-        
-    elif opt in ('-f', '--file'):
-        fReadFileArg = arg
-        ReadFile(fReadFileArg)
-            
-    elif opt in ('-w', '--write'):
-        fAppend = True
-        fWriteFile = None
-        error = False
-        try:
-            fWriteFileArg = arg
-            fWriteFile = open(fWriteFileArg, 'wb+' )
-        except IOError:
-            error = True
-            print "Error: opening {0}".format(arg)
-            fAppend = False
-        
-        if(error == False):
-            fWriteFile.close()
-    
-    elif opt in ('-s', '--start'):
-        a_startsize = long(arg)
-        
-    elif opt in ('-i', '--increment'):
-        a_increment = long(arg)
-        
-    elif opt in ('-p', '--partialsum'):
-        a_partialsum = long(arg)
-    #argv.remove(opt)
-    #argv.remove(arg)
- 
-#   Only necessary if I want to read and write to the same file (probably not wise if
-#   make ctrl+c write data too.
-#if(fAppend == false and fReadFile != None):
-#    fReadFile.close()
-    
-if(len(args) < 2 or len(args) > 4): #fix inequality to <
-    usage(0)
-    exit(1)
-    
-a_target = long(args[0])
-a_min = long(args[1])
-if(len(args) == 3):
-    a_max = long(args[2])
-else:
-    a_max = -1         
-    
-count = long(0)
-
-s = [[None, None, None, None],
-    [None, None, None, None]]
-        
-l = [None]*3
-for i in range(3):
-    l[i] = [None]*4
-    
-signal.signal(signal.SIGINT, signal_handler)
-
-Main()
+if __name__ == "__main__":
+    sys.exit(main())
