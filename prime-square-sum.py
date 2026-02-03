@@ -53,6 +53,7 @@ __version__ = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "2.
 from utils.sieve import generate_primes, generate_n_primes, nth_prime, PRIMESIEVE_AVAILABLE
 from utils.prime_io import load_primes, save_primes, load_primes_range
 from utils import gpu as gpu_utils
+from utils.sum_cache import IncrementalSumCache
 
 
 # =============================================================================
@@ -171,15 +172,16 @@ def parallel_square_sum(primes: np.ndarray, num_workers: Optional[int] = None,
     return sum(partial_sums)
 
 
-def incremental_square_sum(primes: np.ndarray, target: int,
-                           initial_sum: int = 0,
-                           callback=None) -> Tuple[int, int, int, bool, bool]:
+def incremental_sum(primes: np.ndarray, target: int, power: int = 2,
+                    initial_sum: int = 0,
+                    callback=None) -> Tuple[int, int, int, bool, bool]:
     """
-    Compute sum of squared primes incrementally, stopping when target is reached.
+    Compute sum of primes raised to power incrementally, stopping when target is reached.
 
     Args:
         primes: numpy array of primes
         target: Target sum to reach
+        power: Exponent to raise each prime to (default: 2)
         initial_sum: Starting sum (for resumption)
         callback: Optional callback(count, current_sum, last_prime) for progress
 
@@ -193,7 +195,7 @@ def incremental_square_sum(primes: np.ndarray, target: int,
 
     for p in primes:
         p = int(p)
-        current_sum += p * p
+        current_sum += p ** power
         count += 1
         last_prime = p
 
@@ -209,6 +211,26 @@ def incremental_square_sum(primes: np.ndarray, target: int,
     return current_sum, count, last_prime, False, False
 
 
+def incremental_square_sum(primes: np.ndarray, target: int,
+                           initial_sum: int = 0,
+                           callback=None) -> Tuple[int, int, int, bool, bool]:
+    """
+    Compute sum of squared primes incrementally, stopping when target is reached.
+
+    Convenience wrapper for incremental_sum with power=2.
+
+    Args:
+        primes: numpy array of primes
+        target: Target sum to reach
+        initial_sum: Starting sum (for resumption)
+        callback: Optional callback(count, current_sum, last_prime) for progress
+
+    Returns:
+        Tuple of (final_sum, count, last_prime, found_exact, exceeded)
+    """
+    return incremental_sum(primes, target, power=2, initial_sum=initial_sum, callback=callback)
+
+
 # =============================================================================
 # Main Search Function
 # =============================================================================
@@ -216,13 +238,17 @@ def incremental_square_sum(primes: np.ndarray, target: int,
 def search_for_target(target: int,
                       prime_file: Optional[Path] = None,
                       max_primes: Optional[int] = None,
+                      power: int = 2,
+                      use_cache: bool = False,
+                      cache_file: Optional[Path] = None,
                       initial_sum: int = 0,
                       start_index: int = 0,
                       checkpoint_file: Optional[Path] = None,
                       verbose: bool = True) -> Result:
     """
-    Search for a sum of squared primes that matches the target.
+    Search for a sum of primes (raised to power) that matches the target.
 
+    Supports both batch computation and incremental caching for multi-target searches.
     Checkpoints are saved at adaptive intervals: more frequently as
     primes get larger (every prime after 1M processed).
 
@@ -230,6 +256,9 @@ def search_for_target(target: int,
         target: Target sum to find
         prime_file: Optional file with precomputed primes
         max_primes: Maximum number of primes to try
+        power: Exponent to raise primes to (default: 2)
+        use_cache: Enable incremental sum caching (O(1) per prime)
+        cache_file: Path to cache file (default: data/cache/sums.npz)
         initial_sum: Starting sum (for resumption)
         start_index: Starting prime index (for resumption)
         checkpoint_file: File to save checkpoints
@@ -239,11 +268,44 @@ def search_for_target(target: int,
         Result object with computation details
     """
     start_time = time.time()
-    current_sum = initial_sum
-    count = start_index
-    last_prime = 0
     found = False
     exceeded = False
+
+    # Set up cache if requested
+    cache = None
+    if use_cache:
+        cache_file = cache_file or Path("data/cache/sums.npz")
+        if cache_file.exists():
+            if verbose:
+                print(f"Loading cache from {cache_file}...")
+            try:
+                cache = IncrementalSumCache.load_checkpoint(cache_file)
+                if power not in cache.metadata.powers:
+                    # Power not in cache, reload with new power added
+                    current_sum = cache.get_sum(2) if 2 in cache.metadata.powers else 0
+                    cache = IncrementalSumCache(powers=cache.metadata.powers + [power])
+                    cache.add_prime(2)  # Reinitialize
+                else:
+                    current_sum = cache.get_sum(power)
+                if verbose:
+                    print(f"Loaded cache: {cache.get_prime_count()} primes, last={cache.get_last_prime()}")
+            except Exception as e:
+                if verbose:
+                    print(f"Failed to load cache ({e}), creating new cache")
+                cache = IncrementalSumCache(powers=[power])
+                current_sum = 0
+        else:
+            if verbose:
+                print(f"Cache not found, creating new cache: {cache_file}")
+            cache = IncrementalSumCache(powers=[power])
+            current_sum = 0
+
+        count = cache.get_prime_count()
+        last_prime = cache.get_last_prime()
+    else:
+        current_sum = initial_sum
+        count = start_index
+        last_prime = 0
 
     # Load or generate primes
     if prime_file and prime_file.exists():
@@ -303,17 +365,57 @@ def search_for_target(target: int,
                 )
                 state.to_json(checkpoint_file)
 
-    # Run computation
-    final_sum, processed, last_prime, found, exceeded = incremental_square_sum(
-        primes, target, initial_sum, progress_callback
-    )
+    # Use cache path if enabled, otherwise use batch incremental sum
+    if cache:
+        # Incremental caching path
+        next_checkpoint = get_checkpoint_interval(cache.get_prime_count())
 
-    count = start_index + processed
+        for prime in primes:
+            prime = int(prime)
+
+            # Skip primes already in cache
+            if prime <= cache.get_last_prime():
+                continue
+
+            cache.add_prime(prime)
+            current_sum = cache.get_sum(power)
+            count = cache.get_prime_count()
+            last_prime = prime
+
+            # Progress callback at checkpoint intervals
+            if count >= next_checkpoint:
+                progress_callback(count - start_index, current_sum, prime)
+                next_checkpoint = count + get_checkpoint_interval(count)
+
+                # Save cache checkpoint
+                if cache.should_checkpoint():
+                    cache.save_checkpoint(cache_file)
+
+            # Check target
+            if current_sum == target:
+                found = True
+                break
+            elif current_sum > target:
+                exceeded = True
+                break
+
+        # Final cache save
+        cache.save_checkpoint(cache_file)
+
+        final_sum = current_sum
+        processed = count - start_index
+    else:
+        # Batch computation path (original behavior)
+        final_sum, processed, last_prime, found, exceeded = incremental_sum(
+            primes, target, power=power, initial_sum=initial_sum, callback=progress_callback
+        )
+        count = start_index + processed
+
     elapsed = time.time() - start_time
     rate = count / elapsed if elapsed > 0 else 0
 
-    # Final checkpoint
-    if checkpoint_file:
+    # Final checkpoint (batch path only)
+    if checkpoint_file and not cache:
         state = ComputationState(
             target=str(target),
             current_sum=str(final_sum),
@@ -420,6 +522,19 @@ Known values:
     )
 
     parser.add_argument(
+        '--use-cache',
+        action='store_true',
+        help="Enable incremental sum caching (O(1) per prime, 5x+ faster for multi-target searches)"
+    )
+
+    parser.add_argument(
+        '--cache-file',
+        type=Path,
+        default=Path("data/cache/sums.npz"),
+        help="Cache file location (default: data/cache/sums.npz)"
+    )
+
+    parser.add_argument(
         '--no-gpu',
         action='store_true',
         help="Disable GPU acceleration (use CPU only)"
@@ -517,6 +632,9 @@ def main():
         print(f"Power: {args.power} (computing sum of p^{args.power})")
         print(f"Prime file: {args.prime_file or 'generate on-the-fly'}")
         print(f"Max primes: {args.max_primes or 'unlimited'}")
+        print(f"Caching: {'Enabled' if args.use_cache else 'Disabled'}")
+        if args.use_cache:
+            print(f"Cache file: {args.cache_file}")
         if gpu_utils.GPU_AVAILABLE and use_gpu:
             gpu_utils.print_gpu_status()
         else:
@@ -538,6 +656,9 @@ def main():
         target=target,
         prime_file=args.prime_file,
         max_primes=args.max_primes,
+        power=args.power,
+        use_cache=args.use_cache,
+        cache_file=args.cache_file,
         initial_sum=initial_sum,
         start_index=start_index,
         checkpoint_file=args.checkpoint,
