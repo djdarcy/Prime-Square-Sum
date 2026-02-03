@@ -1,0 +1,13 @@
+# Prime-Square-Sum dependencies
+# Install: pip install -r requirements.txt
+
+# Core
+numpy>=2.0
+
+# GPU acceleration (requires NVIDIA GPU + CUDA)
+# For CUDA 12.x:
+cupy-cuda12x>=13.0
+
+# Optional: faster prime generation
+# pip install primesieve  # Linux/Mac
+# conda install -c conda-forge primesieve  # Windows

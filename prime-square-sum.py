@@ -52,6 +52,7 @@ __version__ = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "2.
 # Local imports
 from utils.sieve import generate_primes, generate_n_primes, nth_prime, PRIMESIEVE_AVAILABLE
 from utils.prime_io import load_primes, save_primes, load_primes_range
+from utils import gpu as gpu_utils
 
 
 # =============================================================================
@@ -411,10 +412,23 @@ Known values:
         help="Quick verification that stf(10) = 666"
     )
 
+    parser.add_argument(
+        '--power', '-p',
+        type=int,
+        default=2,
+        help="Power to raise primes to (default: 2 for squares)"
+    )
+
+    parser.add_argument(
+        '--no-gpu',
+        action='store_true',
+        help="Disable GPU acceleration (use CPU only)"
+    )
+
     return parser.parse_args()
 
 
-def verify_666():
+def verify_666(use_gpu: bool = True):
     """Quick verification that sum of first 7 squared primes = 666."""
     print("Verifying: stf(10) = 666 = sum of first 7 squared primes")
     print()
@@ -422,11 +436,16 @@ def verify_666():
     primes = generate_n_primes(7)
     print(f"First 7 primes: {primes.tolist()}")
 
-    squares = [int(p)**2 for p in primes]
-    print(f"Squares: {squares}")
+    # Use GPU if available
+    if use_gpu and gpu_utils.GPU_AVAILABLE:
+        total = gpu_utils.power_sum(primes, power=2, use_gpu=True)
+        print(f"Sum (GPU): {total}")
+    else:
+        squares = [int(p)**2 for p in primes]
+        print(f"Squares: {squares}")
+        total = sum(squares)
+        print(f"Sum: {' + '.join(map(str, squares))} = {total}")
 
-    total = sum(squares)
-    print(f"Sum: {' + '.join(map(str, squares))} = {total}")
     print()
 
     if total == 666:
@@ -437,12 +456,25 @@ def verify_666():
         return False
 
 
+def gpu_bulk_sum(primes: np.ndarray, power: int = 2) -> int:
+    """
+    Compute sum of primes raised to power using GPU.
+
+    This is for bulk computation - no incremental target checking.
+    """
+    if gpu_utils.GPU_AVAILABLE:
+        return gpu_utils.power_sum(primes, power=power, use_gpu=True)
+    else:
+        return gpu_utils.power_sum(primes, power=power, use_gpu=False)
+
+
 def main():
     args = parse_args()
 
     # Quick verification mode
     if args.verify_666:
-        success = verify_666()
+        gpu_utils.init_gpu()  # Try to initialize GPU for verification
+        success = verify_666(use_gpu=not args.no_gpu)
         sys.exit(0 if success else 1)
 
     # Resume from checkpoint
@@ -470,17 +502,27 @@ def main():
         initial_sum = 0
         start_index = 0
 
+    # Initialize GPU
+    use_gpu = not args.no_gpu
+    if use_gpu:
+        gpu_utils.init_gpu()
+
     # Print configuration
     verbose = not args.quiet
     if verbose:
         print("=" * 60)
-        print("Prime Square Sum Calculator v2")
+        print(f"Prime Power Sum Calculator v{__version__}")
         print("=" * 60)
         print(f"Target: {target}")
+        print(f"Power: {args.power} (computing sum of p^{args.power})")
         print(f"Prime file: {args.prime_file or 'generate on-the-fly'}")
         print(f"Max primes: {args.max_primes or 'unlimited'}")
-        print(f"Workers: {args.workers}")
-        print(f"primesieve available: {PRIMESIEVE_AVAILABLE}")
+        if gpu_utils.GPU_AVAILABLE and use_gpu:
+            gpu_utils.print_gpu_status()
+        else:
+            print(f"GPU: {'Disabled' if args.no_gpu else 'Not available'}")
+            print(f"CPU Workers: {args.workers}")
+        print(f"primesieve: {'Available' if PRIMESIEVE_AVAILABLE else 'Not available (using fallback)'}")
         print("=" * 60)
         print()
 

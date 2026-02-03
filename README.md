@@ -34,7 +34,7 @@ This program attempts to provide an answer. The base-10 number from `stf(666)` i
 
 `37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290`
 
-So I've adapted it to work with multiprocessing and eventually CUDA/OpenCL to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/master/paper%20and%20notes) for more details.
+So I've adapted it to work with multiprocessing and CUDA (via CuPy) to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/master/paper%20and%20notes) for more details.
 
 ## Usage
 
@@ -51,12 +51,42 @@ python prime-square-sum.py --resume checkpoint.json
 
 ## Installation
 
+### Quick Start (CPU only)
 ```bash
 pip install numpy
+```
 
-# Optional: faster prime generation
+### Full Setup with GPU Acceleration (Recommended)
+
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate (Windows)
+venv\Scripts\activate
+
+# Activate (Linux/Mac)
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+The `requirements.txt` includes:
+- `numpy` - Array operations
+- `cupy-cuda12x` - GPU acceleration (requires NVIDIA GPU + CUDA 12.x)
+
+### Optional: Faster Prime Generation
+
+```bash
 pip install primesieve  # Linux/Mac
 conda install -c conda-forge primesieve  # Windows
+```
+
+### Verify GPU Setup
+
+```bash
+python -c "from utils.gpu import init_gpu, print_gpu_status; init_gpu(); print_gpu_status()"
 ```
 
 ## Precomputed Primes
@@ -74,7 +104,9 @@ Large prime datasets available via [GitHub Releases](https://github.com/djdarcy/
 ```
 Prime-Square-Sum/
 ├── prime-square-sum.py      # Main program
-├── utils/                   # Sieve, I/O utilities
+├── run_tests.py             # Test runner
+├── utils/                   # Sieve, I/O, GPU utilities
+├── tests/                   # Unit tests
 ├── proofs/                  # Lean 4 proofs
 ├── verification/            # Verification scripts
 ├── paper and notes/         # Mathematica notebook
@@ -85,7 +117,7 @@ Prime-Square-Sum/
 
 ## Roadmap
 
-- [ ] GPU acceleration (CuPy)
+- [x] GPU acceleration (CuPy) - v0.5.1
 - [ ] Distributed computing
 - [ ] Alternative primality testing
 

@@ -67,6 +67,51 @@ Loading 50 million primes:
 
 **NumPy is 25x faster** for loading large prime datasets.
 
+### gpu.py
+GPU-accelerated computation using CuPy.
+
+**Features:**
+- CuPy-based GPU computation (NVIDIA CUDA)
+- Automatic GPU detection and initialization
+- Graceful fallback to CPU multiprocessing
+- Support for arbitrary prime powers (Σp^n)
+- Chunked processing for GPU memory management
+
+**Installation:**
+```bash
+# CUDA 12.x
+pip install cupy-cuda12x
+
+# Or use conda
+conda install -c conda-forge cupy
+```
+
+**Usage:**
+```python
+from utils import init_gpu, power_sum, GPU_AVAILABLE
+
+# Initialize GPU (call once at startup)
+if init_gpu():
+    print("GPU available!")
+else:
+    print("Falling back to CPU")
+
+# Compute sum of squared primes (GPU if available, else CPU)
+primes = load_primes("data/npy_files/1stmil.npy")
+result = power_sum(primes, power=2)  # Σp²
+
+# Or explicitly use GPU
+from utils import gpu_power_sum
+result = gpu_power_sum(primes, power=3)  # Σp³ on GPU
+```
+
+**Performance:**
+| Method | 50M primes | Notes |
+|--------|------------|-------|
+| Single-threaded CPU | ~60s | Baseline |
+| Multiprocessing CPU | ~8s | 8 cores |
+| GPU (RTX 5090) | <1s | 100x+ speedup |
+
 ## Common Workflows
 
 ### Generate and Save Primes

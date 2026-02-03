@@ -21,6 +21,7 @@ Usage:
 import numpy as np
 from typing import List, Optional
 import warnings
+import os
 
 # Try to import primesieve (fast C++ implementation)
 try:
@@ -28,9 +29,22 @@ try:
     PRIMESIEVE_AVAILABLE = True
 except ImportError:
     PRIMESIEVE_AVAILABLE = False
+
+# Track if we've warned about primesieve (warn once per session)
+_primesieve_warned = False
+
+
+def _warn_no_primesieve():
+    """Warn once per session that primesieve is not available."""
+    global _primesieve_warned
+    if _primesieve_warned or os.environ.get('PRIME_SQUARE_SUM_QUIET'):
+        return
+    _primesieve_warned = True
     warnings.warn(
-        "primesieve not available. Install with: pip install primesieve\n"
-        "Falling back to pure Python sieve (much slower)."
+        "primesieve not available - using slower Python fallback.\n"
+        "  Install: pip install primesieve (Linux/Mac)\n"
+        "           conda install -c conda-forge primesieve (Windows)\n"
+        "  Silence: set PRIME_SQUARE_SUM_QUIET=1"
     )
 
 
@@ -55,6 +69,7 @@ def generate_primes(limit: int) -> np.ndarray:
         primes = primesieve.primes(limit)
         return np.array(primes, dtype=np.int64)
     else:
+        _warn_no_primesieve()
         return _python_sieve(limit)
 
 
@@ -73,6 +88,7 @@ def generate_primes_range(start: int, stop: int) -> np.ndarray:
         primes = primesieve.primes(start, stop)
         return np.array(primes, dtype=np.int64)
     else:
+        _warn_no_primesieve()
         # Fallback: generate all up to stop, then filter
         all_primes = _python_sieve(stop)
         return all_primes[all_primes >= start]
@@ -99,6 +115,7 @@ def generate_n_primes(n: int) -> np.ndarray:
         primes = primesieve.n_primes(n)
         return np.array(primes, dtype=np.int64)
     else:
+        _warn_no_primesieve()
         # Estimate upper bound using prime number theorem
         # p_n ~ n * (ln(n) + ln(ln(n))) for n > 5
         import math

@@ -9,6 +9,7 @@ npy_files/
 private/
 
 # Python
+venv/
 __pycache__/
 *.py[cod]
 *$py.class
