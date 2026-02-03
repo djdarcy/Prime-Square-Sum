@@ -522,9 +522,9 @@ Known values:
     )
 
     parser.add_argument(
-        '--use-cache',
+        '--no-cache',
         action='store_true',
-        help="Enable incremental sum caching (O(1) per prime, 5x+ faster for multi-target searches)"
+        help="Disable incremental sum caching (default: caching enabled)"
     )
 
     parser.add_argument(
@@ -632,8 +632,8 @@ def main():
         print(f"Power: {args.power} (computing sum of p^{args.power})")
         print(f"Prime file: {args.prime_file or 'generate on-the-fly'}")
         print(f"Max primes: {args.max_primes or 'unlimited'}")
-        print(f"Caching: {'Enabled' if args.use_cache else 'Disabled'}")
-        if args.use_cache:
+        print(f"Caching: {'Disabled' if args.no_cache else 'Enabled (default)'}")
+        if not args.no_cache:
             print(f"Cache file: {args.cache_file}")
         if gpu_utils.GPU_AVAILABLE and use_gpu:
             gpu_utils.print_gpu_status()
@@ -657,7 +657,7 @@ def main():
         prime_file=args.prime_file,
         max_primes=args.max_primes,
         power=args.power,
-        use_cache=args.use_cache,
+        use_cache=not args.no_cache,
         cache_file=args.cache_file,
         initial_sum=initial_sum,
         start_index=start_index,
