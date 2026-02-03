@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--ND%204.0-lightgrey.svg)](LICENSE)
 
-📓 **[View the Mathematica Notebook](https://github.com/djdarcy/Prime-Square-Sum/blob/master/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)** *(Requires [Mathematica](https://www.wolfram.com/mathematica/) or [Wolfram Player](https://www.wolfram.com/player/))*
+📓 **[View the Mathematica Notebook](https://github.com/djdarcy/Prime-Square-Sum/blob/main/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)** *(Requires [Mathematica](https://www.wolfram.com/mathematica/) or [Wolfram Player](https://www.wolfram.com/player/))*
 
 The python program squares primes and sums them together to determine if:
 
@@ -34,7 +34,7 @@ This program attempts to provide an answer. The base-10 number from `stf(666)` i
 
 `37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290`
 
-So I've adapted it to work with multiprocessing and CUDA (via CuPy) to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/master/paper%20and%20notes) for more details.
+So I've adapted it to work with multiprocessing and CUDA (via CuPy) to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/main/paper%20and%20notes) for more details.
 
 ## Usage
 

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.2] - 2026-02-02
+
+### Added
+- Hybrid GPU/CPU approach for higher powers (Issue #4)
+- `gpu_power_values()` function for GPU exponentiation with CPU summing
+- `_find_int64_cutoff_index()` for finding int64 boundary in prime arrays
+- 6 new tests for hybrid approach (26 total)
+
+### Changed
+- `power_sum()` now uses hybrid approach: GPU for primes where p^n fits in int64, CPU for the rest
+- power=3 with 1M primes now uses ~15% GPU acceleration instead of pure CPU
+- Test coverage expanded from 20 to 26 tests
+
 ## [0.5.1] - 2026-02-02
 
 ### Added

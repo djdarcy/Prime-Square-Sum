@@ -169,15 +169,70 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(gpu_result, cpu_result)
 
     def test_1m_primes_power3(self):
-        """Power=3 with 1M primes should fall back to CPU and work."""
+        """Power=3 with 1M primes uses hybrid approach and matches CPU."""
         if self.million_primes is None:
             self.skipTest("1M primes file not found")
 
-        # This should work via CPU fallback
+        # Hybrid approach should match CPU exactly
         result = gpu_utils.power_sum(self.million_primes, power=3)
-        # Verify against first 100 primes as sanity check
-        partial = sum(int(p) ** 3 for p in self.million_primes[:100])
-        self.assertGreater(result, partial)
+        cpu_result = gpu_utils.cpu_power_sum(self.million_primes, power=3)
+        self.assertEqual(result, cpu_result)
+
+    def test_1m_primes_power4(self):
+        """Power=4 with 1M primes uses hybrid approach and matches CPU."""
+        if self.million_primes is None:
+            self.skipTest("1M primes file not found")
+
+        result = gpu_utils.power_sum(self.million_primes, power=4)
+        cpu_result = gpu_utils.cpu_power_sum(self.million_primes, power=4)
+        self.assertEqual(result, cpu_result)
+
+
+class TestHybridApproach(unittest.TestCase):
+    """Tests for hybrid GPU/CPU approach (Issue #4)."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Initialize GPU."""
+        gpu_utils.init_gpu()
+        cls.gpu_available = gpu_utils.GPU_AVAILABLE
+
+    def test_cutoff_index_power2(self):
+        """Power=2 should have all primes fit in int64."""
+        primes = np.array([2, 3, 5, 7, 11, 15_485_863], dtype=np.int64)
+        cutoff = gpu_utils._find_int64_cutoff_index(primes, power=2)
+        self.assertEqual(cutoff, len(primes))  # All fit
+
+    def test_cutoff_index_power3(self):
+        """Power=3 should exclude primes > ~2.1M."""
+        primes = np.array([2, 1_000_000, 2_000_000, 3_000_000, 15_485_863], dtype=np.int64)
+        cutoff = gpu_utils._find_int64_cutoff_index(primes, power=3)
+        # 2M^3 fits, 3M^3 doesn't
+        self.assertEqual(cutoff, 3)  # [2, 1M, 2M] fit, [3M, 15M] don't
+
+    def test_cutoff_index_power10(self):
+        """Power=10 should only allow very small primes."""
+        primes = np.array([2, 3, 5, 7, 11, 13, 17], dtype=np.int64)
+        cutoff = gpu_utils._find_int64_cutoff_index(primes, power=10)
+        # 9^10 = 3.4B, fits. 10^10 = 10B, fits. Let's check exact cutoff
+        max_prime = gpu_utils._max_prime_for_power(10)
+        self.assertLess(max_prime, 100)  # Very restrictive
+
+    def test_gpu_power_values_small(self):
+        """gpu_power_values should match CPU for small arrays."""
+        if not self.gpu_available:
+            self.skipTest("GPU not available")
+        result = gpu_utils.gpu_power_values(SMALL_PRIMES, power=3)
+        self.assertEqual(result, EXPECTED_SUM_P3)
+
+    def test_gpu_power_values_matches_cpu(self):
+        """gpu_power_values should always match CPU reference."""
+        if not self.gpu_available:
+            self.skipTest("GPU not available")
+        for power in range(1, 6):
+            result = gpu_utils.gpu_power_values(SMALL_PRIMES, power=power)
+            expected = sum(int(p) ** power for p in SMALL_PRIMES)
+            self.assertEqual(result, expected, f"Mismatch at power={power}")
 
 
 if __name__ == "__main__":

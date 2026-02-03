@@ -106,6 +106,25 @@ def _max_prime_for_power(power: int) -> int:
     return int(INT64_MAX ** (1.0 / power))
 
 
+def _find_int64_cutoff_index(primes: np.ndarray, power: int) -> int:
+    """
+    Find the index where p^power would exceed INT64_MAX.
+
+    All primes before this index can have their powers computed on GPU.
+    Primes at and after this index must use CPU.
+
+    Args:
+        primes: Sorted numpy array of primes
+        power: Exponent to raise primes to
+
+    Returns:
+        Index of first prime that would overflow (or len(primes) if all fit)
+    """
+    max_prime = _max_prime_for_power(power)
+    # Binary search for the cutoff point
+    return int(np.searchsorted(primes, max_prime, side='right'))
+
+
 def _calculate_safe_chunk_size(max_prime: int, power: int) -> int:
     """
     Calculate maximum chunk size that won't overflow int64 during GPU sum.
@@ -116,6 +135,56 @@ def _calculate_safe_chunk_size(max_prime: int, power: int) -> int:
     if max_value >= INT64_MAX:
         return 0  # Single value overflows - GPU not usable
     return INT64_MAX // max_value
+
+
+def gpu_power_values(primes: np.ndarray, power: int = 2,
+                     batch_size: int = 100000) -> int:
+    """
+    GPU-accelerated exponentiation with CPU summing.
+
+    Computes p^power on GPU (parallel exponentiation) but returns values
+    to CPU for arbitrary-precision summing. Use when individual p^power
+    values fit in int64 but sums would overflow.
+
+    Args:
+        primes: NumPy array of primes (int64)
+        power: Exponent to raise each prime to
+        batch_size: Process in batches to manage GPU memory (default: 100K)
+
+    Returns:
+        Sum of p^power for all primes (Python int for arbitrary precision)
+
+    Raises:
+        RuntimeError: If GPU is not available
+    """
+    if not GPU_AVAILABLE:
+        raise RuntimeError("GPU not available. Call init_gpu() first or use cpu_power_sum().")
+
+    total = 0  # Python int for arbitrary precision
+
+    for i in range(0, len(primes), batch_size):
+        batch = primes[i:i + batch_size]
+
+        # Transfer to GPU
+        primes_gpu = _cp.asarray(batch, dtype=_cp.int64)
+
+        # Compute on GPU (massively parallel exponentiation)
+        powered = primes_gpu ** power
+
+        # Transfer back to CPU as NumPy array
+        powered_cpu = _cp.asnumpy(powered)
+
+        # Use Python's built-in sum with object dtype to get arbitrary precision
+        # This converts int64 to Python int during accumulation, avoiding overflow
+        batch_sum = int(np.sum(powered_cpu, dtype=object))
+
+        total += batch_sum
+
+        # Free GPU memory
+        del primes_gpu, powered, powered_cpu
+        _cp.get_default_memory_pool().free_all_blocks()
+
+    return total
 
 
 def gpu_power_sum(primes: np.ndarray, power: int = 2,
@@ -210,16 +279,20 @@ def cpu_power_sum(primes: np.ndarray, power: int = 2,
     return sum(partial_sums)
 
 
+MIN_GPU_SEGMENT = 1000  # Minimum primes to bother with GPU
+
+
 def power_sum(primes: np.ndarray, power: int = 2,
               use_gpu: bool = True, **kwargs) -> int:
     """
     Compute sum of primes raised to a power, using GPU if available.
 
     This is the main entry point - it automatically chooses GPU or CPU.
-    Falls back to CPU when GPU chunk size would be too small (int64 overflow).
+    Uses hybrid approach: GPU for primes where p^power fits in int64,
+    CPU for larger primes where overflow would occur.
 
     Args:
-        primes: NumPy array of primes
+        primes: NumPy array of primes (must be sorted ascending)
         power: Exponent to raise each prime to (default: 2)
         use_gpu: Whether to use GPU if available (default: True)
         **kwargs: Additional arguments passed to gpu_power_sum or cpu_power_sum
@@ -227,16 +300,38 @@ def power_sum(primes: np.ndarray, power: int = 2,
     Returns:
         Sum of p^power for all primes
     """
-    if use_gpu and GPU_AVAILABLE and len(primes) > 0:
-        # Check if GPU is viable based on max prime and power
+    if not use_gpu or not GPU_AVAILABLE or len(primes) == 0:
+        return cpu_power_sum(primes, power, **kwargs)
+
+    # Find cutoff: primes before this index can use GPU
+    cutoff = _find_int64_cutoff_index(primes, power)
+
+    # Case 1: All primes fit in int64 individually
+    if cutoff >= len(primes):
         max_prime = int(primes[-1])
         safe_chunk = _calculate_safe_chunk_size(max_prime, power)
-
         if safe_chunk >= MIN_CHUNK_SIZE:
+            # Can do full GPU computation with chunked sums
             return gpu_power_sum(primes, power, **kwargs)
+        else:
+            # Individual values fit, but sums would overflow
+            # Use GPU for exponentiation, CPU for summing
+            return gpu_power_values(primes, power)
 
-    # Fall back to CPU (GPU unavailable, disabled, or would overflow)
-    return cpu_power_sum(primes, power, **kwargs)
+    # Case 2: No primes fit (or too few) - use CPU for everything
+    if cutoff < MIN_GPU_SEGMENT:
+        return cpu_power_sum(primes, power, **kwargs)
+
+    # Case 3: Hybrid - GPU for small primes, CPU for large primes
+    # For the GPU segment, individual values fit but sums may overflow
+    # Use gpu_power_values for GPU exponentiation with CPU summing
+    gpu_segment = primes[:cutoff]
+    cpu_segment = primes[cutoff:]
+
+    gpu_sum = gpu_power_values(gpu_segment, power)
+    cpu_sum = cpu_power_sum(cpu_segment, power, **kwargs)
+
+    return gpu_sum + cpu_sum
 
 
 # Self-test
