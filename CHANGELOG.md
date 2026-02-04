@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.3] - 2026-02-04
+
+### Added
+- **Saved Equation System** `equations.json` (Issue #21)
+  - Load equations by ID or name: `--equation 1` or `--equation primesum-squared`
+  - `--list-equations` - List all available saved equations
+  - `--var` flag for parameter substitution: `--var a=3` or `--var a=3,b=4`
+  - Support for `default: true` marker in equations
+  - Three-tier default precedence: config.json > equations.json > hardcoded
+- **Configuration System** `config.json` (Issue #22)
+  - `--show-config` - Display effective configuration and default equation
+  - `default_equation` field to override equations.json default
+  - `default_bounds` field for custom variable bounds
+- Default `equations.json` shipped with 4 built-in equations:
+  - `primesum-squared` (default) - Sum of squared primes
+  - `primesum-cubed` - Sum of cubed primes
+  - `tri-match` - Prime sums vs triangular numbers
+  - `fib-match` - Prime sums vs Fibonacci numbers
+- `ParameterDef` dataclass for equation parameters with type hints
+- `IteratorDef` dataclass placeholder for custom iterators (Issue #24)
+- 17 new unit tests for equation loading and configuration
+
+### Changed
+- `utils/cli.py` implements full equation and config loading (was stubs)
+- Total test count: 316 passing (was 299)
+
+### Technical Notes
+- Equation parameters support auto-type inference (int/float/str)
+- Unknown --var parameters trigger warning but continue execution
+- Equations use variable names (n, m) not CLI flags (max_n) for bounds
+
+### Phase 2 Progress (Completed!)
+This release completes Phase 2 of the Expression Grammar epic (#13):
+- ✅ #17: Expression parser with AST
+- ✅ #18: CLI rewrite with decomposed flags
+- ✅ #21: Saved equations with equations.json
+- ✅ #22: Default configuration with config.json
+- ⏳ #24: Custom iterators (v0.7.4)
+- ⏳ #23: Smart early termination (v0.7.5)
+
 ## [0.7.2] - 2026-02-04
 
 ### Added
@@ -14,7 +54,7 @@ All notable changes to this project will be documented in this file.
   - `--format` - Output format (text, json, csv)
   - `--verbose` - Show detailed progress and timing
 - `ExpressionComponents` dataclass for decomposed expression building
-- Stubs for saved equations (Issue #21) and default configuration (Issue #22)
+- Stubs for saved equations (Issue #21) and default configuration (Issue #22) - implemented in v0.7.3
 - 29 new unit tests for CLI module (`tests/test_cli.py`)
 - 22 new CLI integration tests (`tests/test_cli_integration.py`)
 
@@ -31,8 +71,8 @@ All notable changes to this project will be documented in this file.
 This release implements the CLI rewrite for Phase 2 of the Expression Grammar epic (#13):
 - ✅ #17: Expression parser with AST
 - ✅ #18: CLI rewrite with decomposed flags
-- ⏳ #21: Saved equations (v0.7.3)
-- ⏳ #22: Default configuration (v0.7.4)
+- ✅ #21: Saved equations (implemented in v0.7.3)
+- ✅ #22: Default configuration (implemented in v0.7.3)
 
 ## [0.7.1] - 2026-02-04
 

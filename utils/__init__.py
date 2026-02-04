@@ -28,11 +28,27 @@ from .grammar import (
     find_matches,
 )
 from .cli import (
+    # Expression building
     ExpressionComponents,
     build_expression_from_args,
     build_bounds_from_args,
     format_match,
     format_no_match,
+    # Equation loading (Issue #21)
+    SavedEquation,
+    EquationsFile,
+    ParameterDef,
+    load_equations_file,
+    find_equations_file,
+    list_equations,
+    print_equations_list,
+    parse_var_string,
+    # Configuration (Issue #22)
+    Config,
+    load_config,
+    find_config_file,
+    resolve_default_equation,
+    show_config,
 )
 
 __all__ = [

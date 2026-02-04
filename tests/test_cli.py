@@ -1,12 +1,14 @@
 """
 Tests for CLI utilities and expression building.
 
-Issue: #18 (CLI rewrite)
+Issues: #18 (CLI rewrite), #21 (Saved Equations), #22 (Configuration)
 Epic: #13 (Generalized Expression Grammar)
 """
 
 import pytest
 import json
+import tempfile
+from pathlib import Path
 from argparse import Namespace
 from utils.cli import (
     ExpressionComponents,
@@ -16,6 +18,16 @@ from utils.cli import (
     format_no_match,
     DEFAULTS,
     DEFAULT_BOUNDS,
+    # Issue #21: Equation loading
+    SavedEquation,
+    EquationsFile,
+    ParameterDef,
+    load_equations_file,
+    parse_var_string,
+    # Issue #22: Configuration
+    Config,
+    load_config,
+    resolve_default_equation,
 )
 
 
@@ -126,18 +138,22 @@ class TestBuildExpressionFromArgs:
         )
         assert build_expression_from_args(args) == "for_any tri(n) <= primesum(m,2)"
 
-    def test_tier3_equation_raises_not_implemented(self):
-        """--equation raises NotImplementedError (stub for #21)."""
+    def test_tier3_equation_loads_from_file(self):
+        """--equation loads equation from equations.json (Issue #21)."""
         args = Namespace(
             expr=None,
             equation="1",
             lhs=None,
-            rhs=None,
+            rhs="666",
             operator=None,
             quantifier=None,
+            var=None,
         )
-        with pytest.raises(NotImplementedError, match="Issue #21"):
-            build_expression_from_args(args)
+        # This should work now that Issue #21 is implemented
+        result = build_expression_from_args(args)
+        # primesum-squared with a=2 default
+        assert "primesum(n,2)" in result
+        assert "666" in result
 
     def test_missing_rhs_raises_error(self):
         """Missing RHS raises ValueError."""
@@ -274,3 +290,159 @@ class TestDefaults:
         """DEFAULT_BOUNDS has expected values."""
         assert DEFAULT_BOUNDS['n'] == 1000000
         assert DEFAULT_BOUNDS['m'] == 10000
+
+
+# =============================================================================
+# Issue #21: Equation Loading Tests
+# =============================================================================
+
+class TestParseVarString:
+    """Test --var argument parsing."""
+
+    def test_single_var(self):
+        """Parse single variable assignment."""
+        result = parse_var_string("a=3")
+        assert result == {"a": "3"}
+
+    def test_multiple_vars_comma(self):
+        """Parse comma-separated variables."""
+        result = parse_var_string("a=3,b=4")
+        assert result == {"a": "3", "b": "4"}
+
+    def test_with_spaces(self):
+        """Handle spaces around comma."""
+        result = parse_var_string("a=3, b=4")
+        assert result == {"a": "3", "b": "4"}
+
+    def test_float_value(self):
+        """Parse float value."""
+        result = parse_var_string("a=3.14")
+        assert result == {"a": "3.14"}
+
+    def test_type_hint_stripped(self):
+        """Type hint is stripped from name."""
+        result = parse_var_string("a:int=3")
+        assert result == {"a": "3"}
+
+
+class TestSavedEquation:
+    """Test SavedEquation dataclass."""
+
+    def test_to_components_basic(self):
+        """Convert equation to components."""
+        eq = SavedEquation(
+            id="1",
+            name="test",
+            lhs="primesum(n,2)",
+            operator="==",
+            quantifier="does_exist",
+        )
+        components = eq.to_components()
+        assert components.lhs == "primesum(n,2)"
+        assert components.quantifier == "does_exist"
+
+    def test_to_components_with_parameter_substitution(self):
+        """Parameter substitution works."""
+        eq = SavedEquation(
+            id="1",
+            name="test",
+            lhs="primesum(n,a)",
+            parameters={"a": ParameterDef(default=2)},
+        )
+        components = eq.to_components({"a": "3"})
+        assert components.lhs == "primesum(n,3)"
+
+    def test_to_components_uses_default_when_no_override(self):
+        """Default parameter value used when no override."""
+        eq = SavedEquation(
+            id="1",
+            name="test",
+            lhs="primesum(n,a)",
+            parameters={"a": ParameterDef(default=2)},
+        )
+        components = eq.to_components()
+        assert components.lhs == "primesum(n,2)"
+
+
+class TestEquationsFile:
+    """Test EquationsFile loading and lookup."""
+
+    def test_get_equation_by_id(self):
+        """Look up equation by ID."""
+        eq = SavedEquation(id="1", name="test", lhs="primesum(n,2)")
+        ef = EquationsFile(version="1.0", equations={"1": eq})
+        result = ef.get_equation("1")
+        assert result is eq
+
+    def test_get_equation_by_name(self):
+        """Look up equation by name."""
+        eq = SavedEquation(id="1", name="test-eq", lhs="primesum(n,2)")
+        ef = EquationsFile(version="1.0", equations={"1": eq})
+        result = ef.get_equation("test-eq")
+        assert result is eq
+
+    def test_get_equation_not_found(self):
+        """Return None for unknown equation."""
+        ef = EquationsFile(version="1.0", equations={})
+        result = ef.get_equation("nonexistent")
+        assert result is None
+
+    def test_get_default(self):
+        """Get default equation."""
+        eq1 = SavedEquation(id="1", name="first", lhs="x", is_default=False)
+        eq2 = SavedEquation(id="2", name="second", lhs="y", is_default=True)
+        ef = EquationsFile(version="1.0", equations={"1": eq1, "2": eq2}, default_id="2")
+        result = ef.get_default()
+        assert result is eq2
+
+
+class TestLoadEquationsFile:
+    """Test loading equations.json from disk."""
+
+    def test_load_valid_file(self):
+        """Load valid equations.json."""
+        # Use the actual equations.json in the project
+        ef = load_equations_file()
+        assert ef is not None
+        assert ef.version == "1.0"
+        assert len(ef.equations) >= 1
+
+    def test_load_file_with_parameters(self):
+        """Equations with parameters loaded correctly."""
+        ef = load_equations_file()
+        eq = ef.get_equation("1")
+        assert eq is not None
+        assert "a" in eq.parameters
+        assert eq.parameters["a"].default == 2
+
+
+class TestResolveDefaultEquation:
+    """Test three-tier default resolution."""
+
+    def test_config_takes_precedence(self):
+        """config.json default_equation wins."""
+        eq1 = SavedEquation(id="1", name="first", lhs="x", is_default=True)
+        eq2 = SavedEquation(id="2", name="second", lhs="y", is_default=False)
+        ef = EquationsFile(version="1.0", equations={"1": eq1, "2": eq2}, default_id="1")
+        config = Config(default_equation="2")
+
+        result, source = resolve_default_equation(ef, config)
+        assert result is eq2
+        assert source == "config"
+
+    def test_equations_default_used_when_no_config(self):
+        """equations.json default:true used when no config."""
+        eq = SavedEquation(id="1", name="first", lhs="x", is_default=True)
+        ef = EquationsFile(version="1.0", equations={"1": eq}, default_id="1")
+        config = Config()
+
+        result, source = resolve_default_equation(ef, config)
+        assert result is eq
+        assert source == "equations"
+
+    def test_hardcoded_when_no_files(self):
+        """Fall back to hardcoded when no equations."""
+        config = Config()
+        result, source = resolve_default_equation(None, config)
+        assert result is None
+        assert source == "hardcoded"

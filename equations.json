@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "equations": {
+    "1": {
+      "name": "primesum-squared",
+      "default": true,
+      "lhs": "primesum(n,a)",
+      "operator": "==",
+      "quantifier": "does_exist",
+      "parameters": {
+        "a": {"default": 2, "type": "int", "description": "prime power exponent"}
+      },
+      "iterators": {
+        "n": {"start": 1, "max": 1000000}
+      },
+      "defaults": {"n": 1000000},
+      "description": "Sum of prime powers equals target (default: squared)"
+    },
+    "2": {
+      "name": "primesum-cubed",
+      "lhs": "primesum(n,3)",
+      "operator": "==",
+      "quantifier": "does_exist",
+      "iterators": {
+        "n": {"start": 1, "max": 1000000}
+      },
+      "defaults": {"n": 1000000},
+      "description": "Sum of cubed primes equals target"
+    },
+    "3": {
+      "name": "tri-match",
+      "lhs": "primesum(n,a)",
+      "rhs": "tri(m)",
+      "operator": "==",
+      "quantifier": "for_any",
+      "parameters": {
+        "a": {"default": 2, "type": "int", "description": "prime power exponent"}
+      },
+      "iterators": {
+        "n": {"start": 1, "max": 10000},
+        "m": {"start": 1, "max": 1000}
+      },
+      "defaults": {"n": 10000, "m": 1000},
+      "description": "Find where prime power sums equal triangular numbers"
+    },
+    "4": {
+      "name": "fib-match",
+      "lhs": "primesum(n,a)",
+      "rhs": "fibonacci(m)",
+      "operator": "==",
+      "quantifier": "for_any",
+      "parameters": {
+        "a": {"default": 2, "type": "int", "description": "prime power exponent"}
+      },
+      "iterators": {
+        "n": {"start": 1, "max": 10000},
+        "m": {"start": 1, "max": 50}
+      },
+      "defaults": {"n": 10000, "m": 50},
+      "description": "Find where prime power sums equal Fibonacci numbers"
+    }
+  }
+}

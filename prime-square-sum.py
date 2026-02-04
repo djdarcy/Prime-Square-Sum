@@ -49,9 +49,14 @@ from utils.function_registry import FunctionRegistry
 from utils.cli import (
     build_expression_from_args,
     build_bounds_from_args,
-    list_equations,
     format_match,
     format_no_match,
+    # Issue #21: Equation loading
+    print_equations_list,
+    load_equations_file,
+    # Issue #22: Configuration
+    load_config,
+    show_config,
 )
 from utils.sieve import generate_n_primes, PRIMESIEVE_AVAILABLE
 from utils import gpu as gpu_utils
@@ -126,16 +131,27 @@ Comparison operators: ==, !=, <, >, <=, >=
         help='Quantifier (default: does_exist)'
     )
 
-    # === Tier 3: Saved Equations (Stub for #21) ===
+    # === Tier 3: Saved Equations (Issue #21) ===
     parser.add_argument(
         '--equation',
         metavar='ID',
-        help='Load saved equation by ID or name (v0.7.3+)'
+        help='Load saved equation by ID or name'
     )
     parser.add_argument(
         '--list-equations',
         action='store_true',
-        help='List available saved equations (v0.7.3+)'
+        help='List available saved equations'
+    )
+    parser.add_argument(
+        '--var',
+        action='append',
+        metavar='NAME=VALUE',
+        help='Set equation parameter (e.g., --var a=3 or --var a=3,b=4)'
+    )
+    parser.add_argument(
+        '--show-config',
+        action='store_true',
+        help='Show effective configuration and default equation'
     )
 
     # === Variable Bounds ===
@@ -355,9 +371,14 @@ def main():
     if args.list_functions:
         return handle_list_functions(registry)
 
-    # List equations (stub for #21)
+    # Show config (Issue #22)
+    if args.show_config:
+        show_config()
+        return 0
+
+    # List equations (Issue #21)
     if args.list_equations:
-        list_equations()
+        print_equations_list()
         return 0
 
     # Verify mode
@@ -378,8 +399,8 @@ def main():
         parser.error(
             "One of the following is required:\n"
             "  --expr EXPRESSION    Full expression\n"
-            "  --target VALUE       Right-hand side value (uses default LHS)\n"
-            "  --equation ID        Saved equation (v0.7.3+)\n"
+            "  --target VALUE       Right-hand side value (uses default equation)\n"
+            "  --equation ID        Load saved equation by ID or name\n"
             "\n"
             "Examples:\n"
             "  --expr \"does_exist primesum(n,2) == 666\"\n"
