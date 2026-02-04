@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-02-04
+
+### Added
+- **Conda environment file** `environment.yml` for reproducible setup
+  - Includes all dependencies: python-primesieve, numpy, pytest, cupy, lark
+  - Configured for Python 3.10 (required for primesieve on Windows)
+- Primesieve Python bindings now working (125M primes/sec benchmark)
+
+### Changed
+- Updated `docs/install.md` with comprehensive conda installation guide
+- Updated `README.md` to reference environment.yml and Python 3.10 requirement
+- Fixed Unicode encoding issue in benchmark script (arrow character)
+
+### Fixed
+- Issue #28: Primesieve environment now properly configured
+- Venv backed up to `private/backup/` to avoid confusion with conda
+
+### Technical Notes
+- Windows requires Python 3.10 for primesieve (conda-forge limitation)
+- Use `python-primesieve` package (not `primesieve` which is C++ library only)
+- Benchmark confirms primesieve throughput: ~125M primes/sec at 1M range
+
+### Reopened
+- Issue #7: Can now run actual GPU vs primesieve benchmark (was theoretical only)
+
 ## [0.7.3] - 2026-02-04
 
 ### Added

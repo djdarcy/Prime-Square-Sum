@@ -1,0 +1,11 @@
+name: prime-square-sum
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - python-primesieve
+  - numpy
+  - pytest
+  - cupy
+  - lark

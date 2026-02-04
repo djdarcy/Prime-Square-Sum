@@ -1,7 +1,7 @@
 # Prime-Square-Sum
 
 [![Version](https://img.shields.io/github/v/release/djdarcy/Prime-Square-Sum?label=version)](https://github.com/djdarcy/Prime-Square-Sum/releases)
-[![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--ND%204.0-lightgrey.svg)](LICENSE)
 
 📓 **[View the Mathematica Notebook](https://github.com/djdarcy/Prime-Square-Sum/blob/main/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)** *(Requires [Mathematica](https://www.wolfram.com/mathematica/) or [Wolfram Player](https://www.wolfram.com/player/))*
@@ -53,21 +53,30 @@ python prime-square-sum.py --resume checkpoint.json
 
 ### Recommended: Conda
 
-Conda handles C++ dependencies and provides pre-built binaries for all platforms:
+Use the provided `environment.yml` for easiest setup:
 
 ```bash
-# Create and activate environment
-conda create -n prime-square-sum python=3.12
+# Create environment from file
+conda env create -f environment.yml
 conda activate prime-square-sum
 
-# Install dependencies
-conda install -c conda-forge numpy primesieve cupy-cuda12x lark
+# Verify
+python prime-square-sum.py --rhs 666
 ```
 
+Or install manually:
+```bash
+conda create -n prime-square-sum python=3.10
+conda activate prime-square-sum
+conda install -c conda-forge python-primesieve numpy pytest cupy lark
+```
+
+**Note:** Windows requires Python 3.10 for primesieve (conda-forge builds only available up to 3.10).
+
 This installs:
+- `python-primesieve` - Fast prime generation (~125M primes/sec)
 - `numpy` - Array operations
-- `primesieve` - Fast prime generation (C++ library, pre-compiled)
-- `cupy-cuda12x` - GPU acceleration (requires NVIDIA GPU + CUDA 12.x)
+- `cupy` - GPU acceleration (requires NVIDIA GPU + CUDA)
 - `lark` - Expression parser for `--expr` queries (v0.7.1+)
 
 ### Other Installation Methods

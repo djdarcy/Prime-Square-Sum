@@ -217,7 +217,7 @@ class SieveBenchmark:
         self.log("1. **Data Dependencies**: Sieve algorithm marks composites with")
         self.log("   dependencies - not embarrassingly parallel")
         self.log("")
-        self.log("2. **Memory Transfer Overhead**: Returning primes GPU→CPU over")
+        self.log("2. **Memory Transfer Overhead**: Returning primes GPU->CPU over")
         self.log("   PCIe is expensive (GPU to main RAM)")
         self.log("")
         self.log("3. **primesieve is Highly Optimized**: Cache-aware wheel sieving")
