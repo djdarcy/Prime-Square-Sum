@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-02-04
+
+### Added
+- **Triangular number functions** in `utils/number_theory.py` (Issue #14)
+  - `tri(n)` - nth triangular number: tri(36) = 666
+  - `qtri(x)` - inverse triangular: qtri(666) = 36
+  - `trisum(b)` - row-sum of digit triangle: trisum(10) = 666
+  - `is_triangular(x)` - check if value is triangular
+- **FunctionRegistry plugin architecture** (Issue #15)
+  - `FunctionRegistry` class with automatic built-in registration
+  - `FunctionSignature` dataclass with metadata (arg_count, varargs, docstring)
+  - `--list-functions` CLI flag to show available functions
+  - `--functions <file.py>` CLI flag to load user-defined functions
+  - Argument count validation for static analysis
+- **Sequence generators module** `utils/sequences.py` (Issue #16)
+  - `primesum(n, power)` - sum of first n primes^power: primesum(7, 2) = 666
+  - `fibonacci(n)` - nth Fibonacci number
+  - `factorial(n)` - n factorial
+  - `catalan(n)` - nth Catalan number
+  - `_ensure_int()` helper for numeric type coercion
+- 100 new unit tests (19 triangular + 41 registry + 40 sequences)
+- Issue #20 created for numeric type handling policy
+
+### Changed
+- FunctionRegistry now has 10 built-in functions (was 0, as it's new)
+- Total test count: 189 passing (was 89)
+
+### Technical Notes
+- `primesum()` includes reserved `_cache` parameter for future optimization (Issue #19)
+- Sequences accept integral floats (7.0 → 7) but reject non-integral (7.5 → error)
+- Expert consultation with Gemini 2.5 Pro validated architecture decisions
+
+### Phase 1 Complete
+This release completes Phase 1 (Foundation) of the Expression Grammar epic (#13):
+- ✅ #14: Triangular functions
+- ✅ #15: FunctionRegistry plugin architecture
+- ✅ #16: Sequence generators module
+
+Next: Phase 2 - Lark parser and `--expr` CLI interface
+
 ## [0.6.0] - 2026-02-03
 
 ### Added

@@ -54,6 +54,7 @@ from utils.sieve import generate_primes, generate_n_primes, nth_prime, PRIMESIEV
 from utils.prime_io import load_primes, save_primes, load_primes_range
 from utils import gpu as gpu_utils
 from utils.sum_cache import IncrementalSumCache
+from utils.function_registry import FunctionRegistry
 
 
 # =============================================================================
@@ -542,6 +543,19 @@ Known values:
         help="Disable GPU acceleration (use CPU only)"
     )
 
+    parser.add_argument(
+        '--list-functions',
+        action='store_true',
+        help="List all available mathematical functions and exit"
+    )
+
+    parser.add_argument(
+        '--functions',
+        type=Path,
+        action='append',
+        help="Load user-defined functions from Python file (can be repeated)"
+    )
+
     return parser.parse_args()
 
 
@@ -587,6 +601,30 @@ def gpu_bulk_sum(primes: np.ndarray, power: int = 2) -> int:
 
 def main():
     args = parse_args()
+
+    # List functions mode
+    if args.list_functions:
+        registry = FunctionRegistry()
+
+        # Load user functions if specified
+        if args.functions:
+            for func_file in args.functions:
+                if not func_file.exists():
+                    print(f"Warning: Function file not found: {func_file}")
+                    continue
+                try:
+                    count = registry.load_from_file(str(func_file))
+                    print(f"Loaded {count} function(s) from {func_file}")
+                except Exception as e:
+                    print(f"Error loading {func_file}: {e}")
+
+        print("\nAvailable Functions:")
+        print("=" * 60)
+        for name, description in registry.list_signatures().items():
+            print(f"  {description}")
+        print("=" * 60)
+        print(f"\nTotal: {len(registry)} functions")
+        sys.exit(0)
 
     # Quick verification mode
     if args.verify_666:

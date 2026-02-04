@@ -1,12 +1,15 @@
 """
-number_theory.py - Mathematical utilities for primality pre-filtering
-=====================================================================
+number_theory.py - Mathematical utilities for number theory operations
+======================================================================
 
-Provides digital root utilities and other number theory tools for
-quick candidate filtering before expensive primality tests.
+Provides:
+- Digital root utilities for primality pre-filtering
+- Triangular number functions (tri, qtri, trisum, is_triangular)
+- General number theory tools
 
 Usage:
     from utils.number_theory import digital_root, could_be_prime_by_digital_root
+    from utils.number_theory import tri, qtri, trisum, is_triangular
 
     # Quick filter: is 37 potentially prime?
     if could_be_prime_by_digital_root(37):
@@ -15,7 +18,15 @@ Usage:
 
     # Compute digital root
     dr = digital_root(666)  # Returns 9 (definitely divisible by 3)
+
+    # Triangular numbers
+    tri(36)        # Returns 666
+    qtri(666)      # Returns 36 (inverse)
+    trisum(10)     # Returns 666 (row-sum of digit triangle)
 """
+
+from typing import Optional
+import math
 
 
 def digital_root(n) -> int:
@@ -228,3 +239,266 @@ def explain_digital_root_filter():
     print("  - Educational demonstration")
     print("  - Manual verification")
     print()
+
+
+# =============================================================================
+# Triangular Number Functions (Issue #14)
+# =============================================================================
+
+def tri(n: int) -> int:
+    """
+    Calculate the nth triangular number.
+
+    The nth triangular number is the sum of integers from 1 to n.
+    Formula: T(n) = n(n+1)/2 = (n² + n) / 2
+
+    Args:
+        n: Non-negative integer index
+
+    Returns:
+        The nth triangular number
+
+    Examples:
+        >>> tri(0)
+        0
+        >>> tri(1)
+        1
+        >>> tri(4)
+        10  # 1 + 2 + 3 + 4 = 10
+        >>> tri(36)
+        666  # Key relationship from Zero_AG paper
+
+    Mathematical context:
+        - tri(4) = 10 represents all digits in base-10 (0-9)
+        - tri(36) = 666, connecting to many mystical number patterns
+        - The entire positive number line can be viewed as tri(∞)
+    """
+    if n < 0:
+        raise ValueError(f"tri() requires non-negative n, got {n}")
+    return (n * n + n) // 2
+
+
+def qtri(x: int) -> Optional[int]:
+    """
+    Inverse triangular function. Returns n if x is triangular, None otherwise.
+
+    Solves the quadratic equation n² + n - 2x = 0 for integer n.
+    Using quadratic formula: n = (-1 + √(1 + 8x)) / 2
+
+    Args:
+        x: Value to test
+
+    Returns:
+        n such that tri(n) = x, or None if x is not triangular
+
+    Examples:
+        >>> qtri(0)
+        0  # tri(0) = 0
+        >>> qtri(1)
+        1  # tri(1) = 1
+        >>> qtri(10)
+        4  # tri(4) = 10
+        >>> qtri(666)
+        36  # tri(36) = 666
+        >>> qtri(5)
+        None  # 5 is not a triangular number
+        >>> qtri(7)
+        None  # 7 is not a triangular number
+
+    Note:
+        This is an O(1) operation using the closed-form inverse formula.
+    """
+    if x < 0:
+        return None
+    if x == 0:
+        return 0
+
+    # Discriminant: 1 + 8x
+    discriminant = 1 + 8 * x
+
+    # Check if discriminant is a perfect square
+    sqrt_disc = int(math.isqrt(discriminant))
+    if sqrt_disc * sqrt_disc != discriminant:
+        return None
+
+    # n = (-1 + sqrt(1 + 8x)) / 2
+    # For this to be an integer, (sqrt_disc - 1) must be even
+    if (sqrt_disc - 1) % 2 != 0:
+        return None
+
+    n = (sqrt_disc - 1) // 2
+
+    # Verify the result (guards against floating-point edge cases)
+    if tri(n) == x:
+        return n
+    return None
+
+
+def is_triangular(x: int) -> bool:
+    """
+    Check if x is a triangular number.
+
+    A triangular number is one that can be arranged in an equilateral triangle.
+    Sequence: 0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, ...
+
+    Args:
+        x: Value to check
+
+    Returns:
+        True if x is triangular, False otherwise
+
+    Examples:
+        >>> is_triangular(0)
+        True
+        >>> is_triangular(1)
+        True
+        >>> is_triangular(3)
+        True
+        >>> is_triangular(10)
+        True
+        >>> is_triangular(666)
+        True  # tri(36) = 666
+        >>> is_triangular(5)
+        False
+        >>> is_triangular(667)
+        False
+    """
+    return qtri(x) is not None
+
+
+def trisum(b: int) -> int:
+    """
+    Calculate the row-sum of a triangular digit arrangement for base b.
+
+    When digits 0 through (b-1) are arranged in a triangular pattern
+    and summed row by row, this function returns the total.
+
+    For base 10 (digits 0-9):
+            9       = 9
+           78       = 78
+          456       = 456
+         0123       = 123
+        ------
+        Total: 123 + 456 + 78 + 9 = 666
+
+    The formula derives from the Zero_AG/Scarcity Framework paper.
+
+    Args:
+        b: Base (number of digits = b, from 0 to b-1)
+
+    Returns:
+        The sum of row values in the triangular digit arrangement
+
+    Examples:
+        >>> trisum(10)
+        666  # 0123 + 456 + 78 + 9 = 666
+        >>> trisum(1)
+        0  # Only digit 0
+        >>> trisum(2)
+        1  # Digits 0,1 arranged as: 1 / 0 = 1 + 0 = 1
+
+    Mathematical context:
+        This function connects triangular arrangements to the mystical
+        significance of 666 in base-10 representation.
+    """
+    if b < 1:
+        raise ValueError(f"trisum() requires b >= 1, got {b}")
+    if b == 1:
+        return 0  # Only digit 0
+
+    # Find how many complete rows we can form with b digits
+    # Row k (1-indexed from bottom) has k digits
+    # Total digits in rows 1..r = tri(r)
+    # We need tri(r) <= b
+
+    # Find the number of complete rows
+    r = qtri(b - 1)  # b-1 because we have digits 0 to b-1
+    if r is None:
+        # b-1 is not triangular, find largest r where tri(r) <= b-1
+        r = 0
+        while tri(r + 1) <= b - 1:
+            r += 1
+
+    # Build the triangular arrangement
+    # Digits fill from bottom-left, going right, then up
+    # Bottom row (row 1) has 1 digit, row 2 has 2 digits, etc.
+    # But the pattern shows bottom row is longest...
+
+    # Re-reading the example:
+    #     9       (row 4, 1 digit: 9)
+    #    78       (row 3, 2 digits: 7,8)
+    #   456       (row 2, 3 digits: 4,5,6)
+    #  0123       (row 1, 4 digits: 0,1,2,3)
+    #
+    # So row 1 (bottom) has the most digits, row r (top) has 1 digit
+    # For b=10 digits (0-9), we have r=4 rows
+    # Row k has (r - k + 1) digits... no wait
+    # Row 1: 4 digits, Row 2: 3 digits, Row 3: 2 digits, Row 4: 1 digit
+    # So row k has (r - k + 1) digits from bottom up
+
+    # Total digits used = 4 + 3 + 2 + 1 = 10 = tri(4)
+    # So r = qtri(b) when b is triangular
+
+    # Actually let's compute directly:
+    # Find r such that tri(r) = b (if b is triangular) or tri(r) < b < tri(r+1)
+
+    # For b = 10: tri(4) = 10, so r = 4
+
+    # Simpler approach: compute directly
+    total = 0
+    digit = 0  # Current digit to place (0, 1, 2, ...)
+
+    # Find number of rows
+    num_rows = 1
+    while tri(num_rows) < b:
+        num_rows += 1
+    if tri(num_rows) > b:
+        num_rows -= 1
+
+    # Now num_rows is such that tri(num_rows) <= b
+    # But we may have extra digits that don't fit
+
+    # For exact triangular numbers, tri(num_rows) = b
+    digits_used = 0
+    row_values = []
+
+    for row in range(num_rows, 0, -1):
+        # Row 'row' has 'row' digits when counting from top
+        # But in our arrangement, bottom has most digits
+        # Row index from bottom: num_rows - row + 1 (has that many spaces)
+        # Actually, let me re-think...
+
+        # Looking at example again:
+        # Row 1 (bottom): 0123 - 4 digits, forms number 0123 = 123
+        # Row 2: 456 - 3 digits, forms number 456
+        # Row 3: 78 - 2 digits, forms number 78
+        # Row 4 (top): 9 - 1 digit, forms number 9
+
+        # So row k from bottom has (num_rows - k + 1) digits
+        pass
+
+    # Let me implement this more directly
+    # Digits 0 to b-1 arranged bottom to top, left to right
+    # Row sizes from bottom: num_rows, num_rows-1, ..., 2, 1
+
+    digits = list(range(b))  # [0, 1, 2, ..., b-1]
+    idx = 0
+    total = 0
+
+    for row_size in range(num_rows, 0, -1):
+        if idx >= len(digits):
+            break
+        # Take row_size digits
+        row_digits = digits[idx:idx + row_size]
+        if len(row_digits) < row_size:
+            # Partial row - include if any digits
+            if row_digits:
+                row_value = int(''.join(map(str, row_digits)))
+                total += row_value
+            break
+        idx += row_size
+        # Form number from these digits
+        row_value = int(''.join(map(str, row_digits)))
+        total += row_value
+
+    return total

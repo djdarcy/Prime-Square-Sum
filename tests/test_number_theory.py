@@ -2,7 +2,7 @@
 test_number_theory.py - Unit tests for number theory utilities
 ===============================================================
 
-Tests digital root and primality pre-filtering functions.
+Tests digital root, primality pre-filtering, and triangular number functions.
 """
 
 import pytest
@@ -12,7 +12,10 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.number_theory import digital_root, could_be_prime, could_be_prime_by_digital_root, digital_root_statistics
+from utils.number_theory import (
+    digital_root, could_be_prime, could_be_prime_by_digital_root, digital_root_statistics,
+    tri, qtri, is_triangular, trisum
+)
 
 
 class TestDigitalRoot:
@@ -249,6 +252,171 @@ class TestDocumentation:
 
         assert "Digital Root Pre-Filtering" in captured.out
         assert "primes p > 3" in captured.out or "Primes" in captured.out
+
+
+# =============================================================================
+# Triangular Number Tests (Issue #14)
+# =============================================================================
+
+class TestTriangularNumber:
+    """Test tri() - nth triangular number."""
+
+    def test_tri_first_values(self):
+        """Test first several triangular numbers."""
+        expected = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55]
+        for n, val in enumerate(expected):
+            assert tri(n) == val, f"tri({n}) should be {val}"
+
+    def test_tri_key_values(self):
+        """Test mathematically significant values."""
+        assert tri(4) == 10, "tri(4) = 10 (digits 0-9)"
+        assert tri(36) == 666, "tri(36) = 666 (key mystical number)"
+        assert tri(100) == 5050, "tri(100) = 5050 (Gauss sum)"
+
+    def test_tri_formula(self):
+        """Verify tri(n) = n(n+1)/2."""
+        for n in range(100):
+            expected = (n * (n + 1)) // 2
+            assert tri(n) == expected
+
+    def test_tri_negative_raises(self):
+        """Test that negative input raises ValueError."""
+        with pytest.raises(ValueError):
+            tri(-1)
+
+
+class TestInverseTriangular:
+    """Test qtri() - inverse triangular function."""
+
+    def test_qtri_triangular_numbers(self):
+        """Test qtri returns correct n for triangular numbers."""
+        triangular_pairs = [(0, 0), (1, 1), (3, 2), (6, 3), (10, 4), (15, 5),
+                           (21, 6), (28, 7), (36, 8), (45, 9), (55, 10)]
+        for val, n in triangular_pairs:
+            assert qtri(val) == n, f"qtri({val}) should be {n}"
+
+    def test_qtri_key_values(self):
+        """Test mathematically significant inverse values."""
+        assert qtri(10) == 4, "qtri(10) = 4"
+        assert qtri(666) == 36, "qtri(666) = 36"
+        assert qtri(5050) == 100, "qtri(5050) = 100"
+
+    def test_qtri_non_triangular_returns_none(self):
+        """Test that non-triangular numbers return None."""
+        non_triangular = [2, 4, 5, 7, 8, 9, 11, 12, 13, 14, 16, 17, 667]
+        for x in non_triangular:
+            assert qtri(x) is None, f"qtri({x}) should be None"
+
+    def test_qtri_negative_returns_none(self):
+        """Test that negative input returns None."""
+        assert qtri(-1) is None
+        assert qtri(-666) is None
+
+    def test_qtri_inverse_of_tri(self):
+        """Test that qtri(tri(n)) == n."""
+        for n in range(200):
+            assert qtri(tri(n)) == n
+
+
+class TestIsTriangular:
+    """Test is_triangular() predicate."""
+
+    def test_is_triangular_true_cases(self):
+        """Test that triangular numbers return True."""
+        triangular = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 666]
+        for x in triangular:
+            assert is_triangular(x), f"{x} should be triangular"
+
+    def test_is_triangular_false_cases(self):
+        """Test that non-triangular numbers return False."""
+        non_triangular = [2, 4, 5, 7, 8, 9, 11, 12, 13, 14, 667, 1000]
+        for x in non_triangular:
+            assert not is_triangular(x), f"{x} should not be triangular"
+
+    def test_is_triangular_large_numbers(self):
+        """Test is_triangular with large values."""
+        # tri(1000) = 500500
+        assert is_triangular(500500)
+        assert not is_triangular(500501)
+
+        # tri(10000) = 50005000
+        assert is_triangular(50005000)
+
+
+class TestTrisum:
+    """Test trisum() - triangular digit sum."""
+
+    def test_trisum_base_10(self):
+        """Test trisum(10) = 666 (classic result)."""
+        # Arrangement:
+        #     9       = 9
+        #    78       = 78
+        #   456       = 456
+        #  0123       = 123
+        # Total: 123 + 456 + 78 + 9 = 666
+        assert trisum(10) == 666, "trisum(10) should equal 666"
+
+    def test_trisum_small_bases(self):
+        """Test trisum for small bases."""
+        assert trisum(1) == 0, "trisum(1) = 0 (only digit 0)"
+        # For non-triangular bases, not all digits fit the triangle
+        # trisum(3) = 3 (tri(2)=3 is triangular): 01+2 = 1+2 = 3
+        assert trisum(3) == 3, "trisum(3) = 3 (01+2 = 3)"
+
+    def test_trisum_invalid_base_raises(self):
+        """Test that base < 1 raises ValueError."""
+        with pytest.raises(ValueError):
+            trisum(0)
+        with pytest.raises(ValueError):
+            trisum(-1)
+
+    def test_trisum_triangular_bases(self):
+        """Test trisum for triangular number bases (complete triangles)."""
+        # tri(2) = 3 digits: 0,1,2 → arranged as: 2 / 01 → 01+2 = 1+2 = 3
+        # tri(3) = 6 digits: 0,1,2,3,4,5 → arranged as: 5 / 34 / 012 → 12+34+5 = 51
+        # tri(4) = 10 digits: 0-9 → arranged as: 9 / 78 / 456 / 0123 → 123+456+78+9 = 666
+        assert trisum(3) == 3   # 01+2 = 1+2 = 3
+        assert trisum(6) == 51  # 012+34+5 = 12+34+5 = 51
+        assert trisum(10) == 666
+
+
+class TestTriangularRelationships:
+    """Test mathematical relationships between triangular functions."""
+
+    def test_tri_qtri_are_inverses(self):
+        """Test that tri and qtri are inverse functions for valid values."""
+        for n in range(100):
+            val = tri(n)
+            assert qtri(val) == n, f"qtri(tri({n})) should equal {n}"
+
+    def test_666_relationships(self):
+        """Test the key 666 relationships from Zero_AG paper."""
+        # tri(36) = 666
+        assert tri(36) == 666
+
+        # qtri(666) = 36
+        assert qtri(666) == 36
+
+        # trisum(10) = 666
+        assert trisum(10) == 666
+
+        # is_triangular(666) = True
+        assert is_triangular(666)
+
+    def test_chain_tri_qtri_trisum(self):
+        """Test the recursive relationship: tri(4) -> 10 -> trisum(10) = 666 -> qtri(666) = 36."""
+        # Start with n=4
+        step1 = tri(4)
+        assert step1 == 10, "tri(4) = 10"
+
+        step2 = trisum(step1)
+        assert step2 == 666, "trisum(10) = 666"
+
+        step3 = qtri(step2)
+        assert step3 == 36, "qtri(666) = 36"
+
+        step4 = tri(step3)
+        assert step4 == 666, "tri(36) = 666 (loop!)"
 
 
 if __name__ == '__main__':
