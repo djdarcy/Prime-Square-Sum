@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-02-04
+
+### Added
+- **CLI rewrite with decomposed flags** `utils/cli.py` (Issue #18)
+  - `--expr` - Full expression syntax: `--expr "does_exist primesum(n,2) == 666"`
+  - `--lhs` - Left-hand side expression (default: primesum(n,2))
+  - `--rhs` / `--target` - Right-hand side value (required unless using --expr)
+  - `--operator` / `--op` - Comparison operator (==, !=, <, >, <=, >=)
+  - `--quantifier` / `-q` - Quantifier (does_exist, for_any)
+  - `--format` - Output format (text, json, csv)
+  - `--verbose` - Show detailed progress and timing
+- `ExpressionComponents` dataclass for decomposed expression building
+- Stubs for saved equations (Issue #21) and default configuration (Issue #22)
+- 29 new unit tests for CLI module (`tests/test_cli.py`)
+- 22 new CLI integration tests (`tests/test_cli_integration.py`)
+
+### Changed
+- `prime-square-sum.py` rewritten to use expression-based evaluation
+- Total test count: 299 passing (was 248)
+
+### Technical Notes
+- Four-tier CLI architecture: Full expressions → Decomposed flags → Saved equations → Default mode
+- Override precedence: CLI flags > Saved equation defaults > Config defaults > Built-in defaults
+- Built-in defaults: `--lhs primesum(n,2)`, `--operator ==`, `--quantifier does_exist`
+
+### Phase 2 Progress
+This release implements the CLI rewrite for Phase 2 of the Expression Grammar epic (#13):
+- ✅ #17: Expression parser with AST
+- ✅ #18: CLI rewrite with decomposed flags
+- ⏳ #21: Saved equations (v0.7.3)
+- ⏳ #22: Default configuration (v0.7.4)
+
 ## [0.7.1] - 2026-02-04
 
 ### Added

@@ -27,6 +27,13 @@ from .grammar import (
     find_free_variables,
     find_matches,
 )
+from .cli import (
+    ExpressionComponents,
+    build_expression_from_args,
+    build_bounds_from_args,
+    format_match,
+    format_no_match,
+)
 
 __all__ = [
     # Prime I/O
