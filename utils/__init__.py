@@ -10,6 +10,23 @@ from .sieve import generate_primes, nth_prime, prime_count
 from .gpu import init_gpu, gpu_power_sum, cpu_power_sum, power_sum, GPU_AVAILABLE
 from .function_registry import FunctionRegistry, FunctionSignature
 from .sequences import primesum, fibonacci, factorial, catalan
+from .grammar import (
+    # AST classes
+    Expression,
+    Comparison,
+    FunctionCall,
+    Variable,
+    Literal,
+    # Parser
+    ExpressionParser,
+    ParseError,
+    # Evaluator
+    ExpressionEvaluator,
+    EvaluationError,
+    # Utilities
+    find_free_variables,
+    find_matches,
+)
 
 __all__ = [
     # Prime I/O
@@ -34,4 +51,16 @@ __all__ = [
     'fibonacci',
     'factorial',
     'catalan',
+    # Expression grammar (Issue #17)
+    'Expression',
+    'Comparison',
+    'FunctionCall',
+    'Variable',
+    'Literal',
+    'ExpressionParser',
+    'ParseError',
+    'ExpressionEvaluator',
+    'EvaluationError',
+    'find_free_variables',
+    'find_matches',
 ]

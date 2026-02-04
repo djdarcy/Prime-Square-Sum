@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-02-04
+
+### Added
+- **Expression parser with Lark** `utils/grammar.py` (Issue #17)
+  - AST classes: `Literal`, `Variable`, `FunctionCall`, `Comparison`, `Expression`
+  - `ExpressionParser` - Lark-based LALR parser for expression grammar
+  - `ExpressionEvaluator` - Evaluates AST with FunctionRegistry integration
+  - `find_free_variables()` - Detects unbound variables in expressions
+  - `find_matches()` - Iteration engine for `does_exist`/`for_any` quantifiers
+  - `ParseError`, `EvaluationError` - Friendly error messages
+- 59 new unit tests for grammar module
+- `lark>=1.1.0` dependency (available via pip and conda-forge)
+
+### Changed
+- Total test count: 248 passing (was 189)
+
+### Technical Notes
+- Parse-once, evaluate-many pattern for performance
+- Supports nested function calls: `tri(qtri(666))`
+- Two-variable iteration: `for_any primesum(n,2) == tri(m)`
+- Hard error for missing variable bounds (scientific rigor)
+
+### Phase 2 Progress
+This release implements the parser core for Phase 2 of the Expression Grammar epic (#13):
+- ✅ #17: Expression parser with AST (core complete)
+- ⏳ #18: CLI rewrite with `--expr` (next)
+
 ## [0.7.0] - 2026-02-04
 
 ### Added

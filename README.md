@@ -61,13 +61,14 @@ conda create -n prime-square-sum python=3.12
 conda activate prime-square-sum
 
 # Install dependencies
-conda install -c conda-forge numpy primesieve cupy-cuda12x
+conda install -c conda-forge numpy primesieve cupy-cuda12x lark
 ```
 
 This installs:
 - `numpy` - Array operations
 - `primesieve` - Fast prime generation (C++ library, pre-compiled)
 - `cupy-cuda12x` - GPU acceleration (requires NVIDIA GPU + CUDA 12.x)
+- `lark` - Expression parser for `--expr` queries (v0.7.1+)
 
 ### Other Installation Methods
 
