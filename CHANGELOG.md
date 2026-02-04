@@ -2,6 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-02-03
+
+### Added
+- **Incremental sum caching** via `IncrementalSumCache` class (Issue #5)
+  - O(1) per prime vs O(n) batch recomputation
+  - Multi-power tracking (p², p³, p⁴ simultaneously)
+  - Persistent `.npz` checkpoints with arbitrary precision
+  - Adaptive checkpointing intervals (1K→100→10→1 based on prime count)
+- `--no-cache` CLI flag to disable caching (caching now default)
+- `utils/sum_cache.py` - New caching infrastructure (~250 lines)
+- `utils/number_theory.py` - Digital root utilities (Issue #8)
+  - `digital_root()` - O(1) calculation via formula
+  - `could_be_prime_by_digital_root()` - Filters multiples of 3
+  - `could_be_prime()` - Combined filter (~66% candidate elimination)
+- GPU sieving benchmark in `tests/one-offs/performance/benchmark_sieve.py` (Issue #7)
+- Windows primesieve installation guide in `docs/install.md` (Issue #3)
+- 43 new unit tests (16 integration + 27 number theory)
+
+### Fixed
+- Cache "power not in cache" handler no longer destroys existing data
+- JSON serialization for numpy int64 types from primesieve
+- `last_prime` initialization changed from 0 to None (semantic correctness)
+- Docstring error: `digital_root(666)` returns 9, not 3
+
+### Changed
+- Caching enabled by default (use `--no-cache` to disable)
+- Improved primesieve warning with conda installation instructions
+
+### Performance
+- Incremental caching: 5x+ speedup for repeated target searches
+- Checkpoint I/O: ~10ms (negligible overhead)
+- Multi-power sums computed in single pass
+
+### Closed Issues
+- #2: Arbitrary prime powers (completed in v0.5.1, commit 3a39c61)
+- #3: Windows primesieve installation guide
+- #5: Incremental sum caching with checkpointing
+- #7: GPU sieving evaluation (primesieve remains optimal)
+- #8: Digital root utility for primality pre-filtering
+
+### Deferred to v0.7.x
+- #1: Distributed computing (open)
+- #6: OEIS-style sequence storage
+- #9-12: Cache architecture improvements (power-based isolation)
+
 ## [0.5.2] - 2026-02-02
 
 ### Added
