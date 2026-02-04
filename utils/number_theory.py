@@ -14,7 +14,7 @@ Usage:
         result = expensive_primality_test(37)
 
     # Compute digital root
-    dr = digital_root(666)  # Returns 3 (definitely divisible by 3)
+    dr = digital_root(666)  # Returns 9 (definitely divisible by 3)
 """
 
 
@@ -38,8 +38,7 @@ def digital_root(n) -> int:
         2  # 3 + 8 = 11, then 1 + 1 = 2
 
         >>> digital_root(666)
-        3  # 6 + 6 + 6 = 18, then 1 + 8 = 9... wait, let me recalculate
-           # Actually: 1 + ((666 - 1) % 9) = 1 + (665 % 9) = 1 + 8 = 9
+        9  # 6 + 6 + 6 = 18, 1 + 8 = 9, or via formula: 1 + ((666 - 1) % 9) = 9
 
         >>> digital_root(9)
         9

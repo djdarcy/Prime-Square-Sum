@@ -281,10 +281,12 @@ def search_for_target(target: int,
             try:
                 cache = IncrementalSumCache.load_checkpoint(cache_file)
                 if power not in cache.metadata.powers:
-                    # Power not in cache, reload with new power added
-                    current_sum = cache.get_sum(2) if 2 in cache.metadata.powers else 0
-                    cache = IncrementalSumCache(powers=cache.metadata.powers + [power])
-                    cache.add_prime(2)  # Reinitialize
+                    # Power not in cache - create fresh cache for requested power
+                    # Note: v0.7.x will implement proper cache isolation per power
+                    if verbose:
+                        print(f"Cache doesn't contain power={power}, creating new cache")
+                    cache = IncrementalSumCache(powers=[power])
+                    current_sum = 0
                 else:
                     current_sum = cache.get_sum(power)
                 if verbose:

@@ -33,7 +33,7 @@ class TestCacheMetadata:
         assert meta.version == "1.0"
         assert meta.powers == [2, 3, 4]
         assert meta.prime_count == 0
-        assert meta.last_prime == 0
+        assert meta.last_prime is None
         assert meta.oeis_sequence_ids is None
         assert meta.created_timestamp > 0
 
@@ -356,7 +356,7 @@ class TestEdgeCases:
         cache = IncrementalSumCache(powers=[2])
 
         assert cache.get_prime_count() == 0
-        assert cache.get_last_prime() == 0
+        assert cache.get_last_prime() is None
         assert cache.get_sum(2) == 0
 
     def test_single_prime(self):

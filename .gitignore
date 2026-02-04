@@ -8,6 +8,9 @@ npy_files/
 # Private analysis documents
 private/
 
+# Local development notes (project-specific guidance)
+CLAUDE.md
+
 # Python
 venv/
 __pycache__/

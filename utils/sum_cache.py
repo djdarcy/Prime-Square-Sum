@@ -41,7 +41,18 @@ import time
 import numpy as np
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
+
+
+def _numpy_to_python(obj: Any) -> Any:
+    """Convert numpy types to Python native types for JSON serialization."""
+    if isinstance(obj, (np.integer, np.floating)):
+        return obj.item()
+    elif isinstance(obj, dict):
+        return {k: _numpy_to_python(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_numpy_to_python(item) for item in obj]
+    return obj
 
 
 @dataclass
@@ -55,7 +66,7 @@ class CacheMetadata:
     version: str = "1.0"
     powers: List[int] = field(default_factory=lambda: [2, 3, 4])
     prime_count: int = 0
-    last_prime: int = 0
+    last_prime: Optional[int] = None
     created_timestamp: float = 0.0
     updated_timestamp: float = 0.0
     oeis_sequence_ids: Optional[Dict[int, str]] = None  # Future: {2: "A007504", 3: "A098999"}
@@ -174,9 +185,13 @@ class IncrementalSumCache:
         # Update timestamp
         self.metadata.updated_timestamp = time.time()
 
+        # Convert metadata to dict and handle numpy types for JSON serialization
+        metadata_dict = asdict(self.metadata)
+        metadata_dict = _numpy_to_python(metadata_dict)
+
         # Prepare data for .npz
         data_dict = {
-            'metadata': json.dumps(asdict(self.metadata)),
+            'metadata': json.dumps(metadata_dict),
             'initial_values': np.array(self.initial_values, dtype=object),
             'recent_values': np.array(self.recent_values, dtype=object),
         }
