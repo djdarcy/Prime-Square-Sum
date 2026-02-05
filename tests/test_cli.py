@@ -446,3 +446,62 @@ class TestResolveDefaultEquation:
         result, source = resolve_default_equation(None, config)
         assert result is None
         assert source == "hardcoded"
+
+
+class TestAlgorithmConfig:
+    """Test algorithm configuration loading (Issue #29)."""
+
+    def test_config_with_algorithm_settings(self, tmp_path):
+        """Config loads algorithm settings correctly."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text('''{
+            "algorithms": {"sieve": "segmented"},
+            "max_memory_mb": 512,
+            "prefer": "minimal"
+        }''')
+
+        config = load_config(config_file)
+        assert config.algorithms == {"sieve": "segmented"}
+        assert config.max_memory_mb == 512
+        assert config.prefer == "minimal"
+
+    def test_config_without_algorithm_settings(self, tmp_path):
+        """Config works without algorithm settings (defaults)."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{"default_equation": "test"}')
+
+        config = load_config(config_file)
+        assert config.algorithms == {}
+        assert config.max_memory_mb is None
+        assert config.prefer is None
+
+    def test_config_partial_algorithm_settings(self, tmp_path):
+        """Config with only some algorithm settings."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{"max_memory_mb": 256}')
+
+        config = load_config(config_file)
+        assert config.algorithms == {}
+        assert config.max_memory_mb == 256
+        assert config.prefer is None
+
+    def test_config_multiple_algorithm_classes(self, tmp_path):
+        """Config can specify multiple algorithm classes."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text('''{
+            "algorithms": {
+                "sieve": "segmented",
+                "fibonacci": "matrix"
+            }
+        }''')
+
+        config = load_config(config_file)
+        assert config.algorithms["sieve"] == "segmented"
+        assert config.algorithms["fibonacci"] == "matrix"
+
+    def test_empty_config_returns_defaults(self):
+        """Empty/missing config returns default values."""
+        config = Config()
+        assert config.algorithms == {}
+        assert config.max_memory_mb is None
+        assert config.prefer is None

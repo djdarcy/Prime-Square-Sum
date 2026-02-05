@@ -1,0 +1,26 @@
+{
+    "_comment": "Copy this file to config.json and customize as needed",
+
+    "_comment_equation": "Default equation to use when no --target/--expr specified",
+    "default_equation": "primesum-squared",
+
+    "_comment_bounds": "Override default variable bounds",
+    "default_bounds": {
+        "n": 1000000,
+        "m": 10000
+    },
+
+    "_comment_output": "Default output format: text, json, or csv",
+    "output_format": "text",
+
+    "_comment_algorithms": "Algorithm variants - sieve options: auto, primesieve, basic, segmented, individual",
+    "algorithms": {
+        "sieve": "auto"
+    },
+
+    "_comment_memory": "Maximum memory in MB for sieve operations (null = auto-detect)",
+    "max_memory_mb": 1024,
+
+    "_comment_prefer": "Resource preference hint: cpu, memory, minimal, gpu (null = no preference)",
+    "prefer": null
+}

@@ -437,14 +437,34 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    # Configure sieve algorithm (Issue #29)
+    # Load config for algorithm defaults (Issue #29)
+    # Precedence: CLI > config.json > auto-detection
+    config = load_config()
+
+    # Apply config.json algorithm settings first (lower precedence)
+    if config.algorithms.get('sieve'):
+        configure_sieve(algorithm=config.algorithms['sieve'])
+        if args.verbose:
+            print(f"[INFO] Sieve algorithm (config): {config.algorithms['sieve']}")
+
+    if config.max_memory_mb:
+        configure_sieve(max_memory_mb=config.max_memory_mb)
+        if args.verbose:
+            print(f"[INFO] Max memory (config): {config.max_memory_mb} MB")
+
+    if config.prefer:
+        configure_sieve(prefer=config.prefer)
+        if args.verbose:
+            print(f"[INFO] Resource preference (config): {config.prefer}")
+
+    # Apply CLI flags (higher precedence, overrides config)
     if args.algorithm:
         try:
             algo_class, algo_variant = parse_algorithm_arg(args.algorithm)
             if algo_class == "sieve":
                 configure_sieve(algorithm=algo_variant)
                 if args.verbose:
-                    print(f"[INFO] Sieve algorithm: {algo_variant}")
+                    print(f"[INFO] Sieve algorithm (CLI): {algo_variant}")
             else:
                 print(f"Warning: Unknown algorithm class '{algo_class}', ignoring",
                       file=sys.stderr)
@@ -455,12 +475,12 @@ def main():
     if args.max_memory:
         configure_sieve(max_memory_mb=args.max_memory)
         if args.verbose:
-            print(f"[INFO] Max memory: {args.max_memory} MB")
+            print(f"[INFO] Max memory (CLI): {args.max_memory} MB")
 
     if args.prefer:
         configure_sieve(prefer=args.prefer)
         if args.verbose:
-            print(f"[INFO] Resource preference: {args.prefer}")
+            print(f"[INFO] Resource preference (CLI): {args.prefer}")
 
     # Initialize GPU (if not disabled)
     if not args.no_gpu:

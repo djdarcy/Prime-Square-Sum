@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.5] - 2026-02-04
+
+### Added
+- **Multi-algorithm sieve system** (Issue #29)
+  - Strategy Pattern: `_python_sieve()` facade dispatches to specialized implementations
+  - `_basic_sieve()`: Original O(n) memory implementation
+  - `_segmented_sieve()`: O(√n + segment) bounded memory for large ranges
+  - `_individual_sieve()`: O(primes found) minimal memory fallback
+  - Auto-selection based on available system memory
+- **CLI algorithm flags**
+  - `--algorithm sieve:<variant>` - Force specific algorithm (auto/primesieve/basic/segmented/individual)
+  - `--prefer [cpu|gpu|memory|minimal]` - Resource preference hint
+  - `--max-memory MB` - Set memory limit for sieve operations
+  - `--list-algorithms` - Display available algorithm variants with complexity info
+- **config.json algorithm settings**
+  - `algorithms.sieve` - Default sieve algorithm
+  - `max_memory_mb` - Default memory limit
+  - `prefer` - Default resource preference
+  - Three-tier precedence: CLI > config.json > auto-detection
+- `config.json.example` - Sample configuration with documented options
+- `--show-config` now displays algorithm settings
+- 39 new tests (34 sieve + 5 config) - 355 total tests passing
+
+### Technical Notes
+- Segmented sieve uses same O(n log log n) complexity as basic sieve
+- Memory bounded to segment_size + √limit primes cache
+- Segment size defaults to 10% of available memory (1MB-100MB bounds)
+- `psutil` optional for memory detection (falls back to 1GB default)
+
+### Related Issues
+- Issue #29: Segmented sieve with memory bounds (complete)
+- Issue #30: Algorithm Variant System (foundation laid)
+- Issue #12: Pre-filter benchmark (informed individual sieve)
+
+### Design Documents
+- `2026-02-04__19-49-53__segmented-sieve-memory-bounded.md`
+- `2026-02-04__20-34-47__sieve-implementation-tradeoffs.md`
+
 ## [0.7.4] - 2026-02-04
 
 ### Added

@@ -40,14 +40,42 @@ So I've adapted it to work with multiprocessing and CUDA (via CuPy) to speed up 
 
 ```bash
 # Verify stf(10) = 666
-python prime-square-sum.py --verify-666
+python prime-square-sum.py --verify 666
 
-# Search with precomputed primes (download from Releases into data/)
-python prime-square-sum.py --target 666 --prime-file data/npy_files/1stmil.npy
+# Find n where sum of squared primes equals 666
+python prime-square-sum.py --target 666
 
-# Resume from checkpoint
-python prime-square-sum.py --resume checkpoint.json
+# Use expression syntax for complex queries
+python prime-square-sum.py --expr "does_exist primesum(n,2) == 666"
+
+# Find matches between prime sums and triangular numbers
+python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 --max-m 50
+
+# List available functions
+python prime-square-sum.py --list-functions
 ```
+
+### Algorithm Selection (v0.7.5+)
+
+Control which sieve algorithm is used for prime generation:
+
+```bash
+# List available algorithms
+python prime-square-sum.py --list-algorithms
+
+# Force segmented sieve (bounded memory)
+python prime-square-sum.py --target 666 --algorithm sieve:segmented
+
+# Use minimal memory mode
+python prime-square-sum.py --target 666 --prefer minimal
+
+# Set memory limit
+python prime-square-sum.py --target 666 --max-memory 512
+```
+
+Available algorithms: `auto`, `primesieve`, `basic`, `segmented`, `individual`
+
+Settings can also be saved in `config.json` (see `config.json.example`).
 
 ## Installation
 

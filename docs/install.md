@@ -27,6 +27,48 @@ If you need Python 3.12+ for other reasons, you can:
 1. Accept the pure Python fallback (slower but functional)
 2. Use a separate Python 3.10 environment just for primesieve benchmarks
 
+## Activating the Conda Environment
+
+Unlike Python's built-in `venv`, conda environments don't have an `activate` script you can run directly from the environment folder. Here are your options:
+
+**Option 1: Use Anaconda Prompt (Windows)**
+
+Launch "Anaconda Prompt" from the Start Menu, then:
+```bash
+conda activate prime-square-sum
+cd C:\code\Prime-Square-Sum
+python prime-square-sum.py --verify 666
+```
+
+**Option 2: Use full Python path directly**
+
+Skip activation entirely and call the environment's Python directly:
+```bash
+# Windows
+C:\Users\YourName\anaconda3\envs\prime-square-sum\python.exe prime-square-sum.py --verify 666
+
+# Linux/Mac
+~/anaconda3/envs/prime-square-sum/bin/python prime-square-sum.py --verify 666
+```
+
+**Option 3: Initialize conda in your shell (recommended for regular use)**
+
+Run once to set up your shell:
+```bash
+# Windows CMD
+C:\Users\YourName\anaconda3\Scripts\conda.exe init cmd.exe
+
+# Windows PowerShell
+C:\Users\YourName\anaconda3\Scripts\conda.exe init powershell
+
+# Linux/Mac
+~/anaconda3/bin/conda init bash  # or zsh
+```
+
+Then restart your terminal. After this, `conda activate prime-square-sum` will work in any terminal.
+
+**Common mistake:** Unlike venv where you run `venv\Scripts\activate`, conda doesn't work this way. The `conda` command must be in your PATH first.
+
 ## Conda Manual Installation
 
 If you prefer to install manually instead of using `environment.yml`:
@@ -78,13 +120,22 @@ pip install numpy lark
 
 **Trade-offs:**
 - ✅ Minimal dependencies, fast installation
-- ❌ No primesieve (slower prime generation)
+- ❌ No primesieve (uses Python fallback sieve)
 - ❌ No GPU acceleration (no CuPy)
 
 **When to use:**
 - You're using pre-computed primes from `data/npy_files/` (typical case)
 - You don't have an NVIDIA GPU
 - You want the smallest footprint
+
+**Memory-constrained systems (v0.7.5+):**
+
+The Python fallback automatically selects an appropriate sieve algorithm based on available memory:
+- **Basic sieve**: Fast, but uses O(n) memory
+- **Segmented sieve**: Same speed, bounded memory O(√n + segment)
+- **Individual testing**: Slowest, minimal memory
+
+Override with `--algorithm sieve:segmented` or `--prefer minimal`. See `--list-algorithms` for details.
 
 ## Mamba (Faster Conda Alternative)
 

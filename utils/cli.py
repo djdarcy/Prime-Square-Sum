@@ -612,6 +612,10 @@ class Config:
     default_bounds: Dict[str, int] = field(default_factory=dict)
     output_format: str = "text"
     source_path: Optional[Path] = None
+    # Algorithm settings (Issue #29)
+    algorithms: Dict[str, str] = field(default_factory=dict)
+    max_memory_mb: Optional[int] = None
+    prefer: Optional[str] = None
 
 
 def find_config_file() -> Optional[Path]:
@@ -663,6 +667,10 @@ def load_config(path: Optional[Path] = None) -> Config:
         default_bounds=data.get('default_bounds', {}),
         output_format=data.get('output_format', 'text'),
         source_path=path,
+        # Algorithm settings (Issue #29)
+        algorithms=data.get('algorithms', {}),
+        max_memory_mb=data.get('max_memory_mb'),
+        prefer=data.get('prefer'),
     )
 
 
@@ -768,6 +776,18 @@ def show_config(
 
     # Output format
     print(f"\nOutput format: {config.output_format}")
+
+    # Algorithm settings (Issue #29)
+    print("\nAlgorithm settings:")
+    if config.algorithms:
+        for algo_class, variant in config.algorithms.items():
+            print(f"  {algo_class}: {variant}")
+    else:
+        print("  (auto-detection)")
+    if config.max_memory_mb:
+        print(f"  max_memory: {config.max_memory_mb} MB")
+    if config.prefer:
+        print(f"  prefer: {config.prefer}")
     print()
 
 
