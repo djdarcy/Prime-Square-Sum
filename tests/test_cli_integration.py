@@ -197,28 +197,76 @@ class TestOutputFormats:
 
 
 # =============================================================================
-# Verify Mode Tests
+# Verify Quantifier Tests (Issue #34)
 # =============================================================================
 
-class TestVerifyMode:
-    """Test --verify special mode."""
+class TestVerifyQuantifier:
+    """Test verify quantifier for closed formulas."""
 
-    def test_verify_666(self):
-        """--verify 666 runs special verification."""
-        code, stdout, stderr = run_cli("--verify", "666")
-        assert code == 0
-        assert "VERIFIED" in stdout
-        assert "666" in stdout
-        assert "17" in stdout  # Last prime in sum
-
-    def test_verify_other_value(self):
-        """--verify with other value runs as expression."""
+    def test_verify_explicit_true(self):
+        """Explicit verify returns 'true' for true formula."""
         code, stdout, stderr = run_cli(
-            "--verify", "5",  # primesum(1,2) = 4, primesum(2,2) = 13
-            "--max-n", "10"
+            "--expr", "verify primesum(7,2) == 666"
         )
-        # Should not find a match
-        assert code == 1
+        assert code == 0
+        assert "true" in stdout.lower()
+
+    def test_verify_explicit_false(self):
+        """Explicit verify returns 'false' for false formula."""
+        code, stdout, stderr = run_cli(
+            "--expr", "verify primesum(7,2) == 667"
+        )
+        # Note: verify false still exits 0 (it worked, answer is false)
+        # The expression evaluated successfully, result is false
+        assert "false" in stdout.lower()
+
+    def test_verify_implicit(self):
+        """Implicit verify (no quantifier, no free vars) works."""
+        code, stdout, stderr = run_cli(
+            "--expr", "tri(36) == 666"
+        )
+        assert code == 0
+        assert "true" in stdout.lower()
+
+    def test_verify_json_output(self):
+        """Verify with JSON output format."""
+        code, stdout, stderr = run_cli(
+            "--expr", "verify primesum(7,2) == 666",
+            "--format", "json"
+        )
+        assert code == 0
+        assert '"verified": true' in stdout or '"verified":true' in stdout
+
+    def test_verify_primesum_values(self):
+        """Verify primesum values with different powers.
+
+        Sum of squared primes (power=2):
+          primesum(1,2) = 2^2 = 4
+          primesum(2,2) = 2^2 + 3^2 = 4 + 9 = 13
+
+        Sum of primes (power=1):
+          primesum(2,1) = 2 + 3 = 5
+        """
+        # primesum(1,2) = 2^2 = 4
+        code, stdout, stderr = run_cli("--expr", "verify primesum(1,2) == 4")
+        assert code == 0
+        assert "true" in stdout.lower()
+
+        # primesum(2,2) = 2^2 + 3^2 = 4 + 9 = 13
+        code, stdout, stderr = run_cli("--expr", "verify primesum(2,2) == 13")
+        assert code == 0
+        assert "true" in stdout.lower()
+
+        # primesum(2,1) = 2 + 3 = 5 (sum of primes, not squared)
+        code, stdout, stderr = run_cli("--expr", "verify primesum(2,1) == 5")
+        assert code == 0
+        assert "true" in stdout.lower()
+
+        # Verify false output: 5 is NOT a sum of squared primes
+        # (primesum(1,2)=4, primesum(2,2)=13, gap skips 5)
+        code, stdout, stderr = run_cli("--expr", "verify primesum(1,2) == 5")
+        assert code == 0  # verify succeeded, answer is false
+        assert "false" in stdout.lower()
 
 
 # =============================================================================

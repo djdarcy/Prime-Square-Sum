@@ -39,9 +39,6 @@ So I've adapted it to work with multiprocessing and CUDA (via CuPy) to speed up 
 ## Usage
 
 ```bash
-# Verify stf(10) = 666
-python prime-square-sum.py --verify 666
-
 # Find n where sum of squared primes equals 666
 python prime-square-sum.py --target 666
 
@@ -54,6 +51,27 @@ python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 
 # List available functions
 python prime-square-sum.py --list-functions
 ```
+
+### Verify Mode (v0.7.6+)
+
+Verify known results without iteration using the `verify` quantifier:
+
+```bash
+# Explicit verify - returns true/false
+python prime-square-sum.py --expr "verify primesum(7,2) == 666"  # Returns: true
+
+# Implicit verify - auto-detected when no free variables
+python prime-square-sum.py --expr "primesum(7,2) == 666"  # Returns: true
+
+# Using saved equation
+python prime-square-sum.py --equation verify-stf10
+
+# JSON output for programmatic use
+python prime-square-sum.py --expr "verify primesum(7,2) == 666" --format json
+# Returns: {"verified": true}
+```
+
+The `verify` quantifier evaluates closed formulas (no free variables) directly, returning `true` or `false` without any iteration.
 
 ### Algorithm Selection (v0.7.5+)
 
@@ -110,6 +128,15 @@ This installs:
 ### Other Installation Methods
 
 For venv, pip, Docker, GPU setup, and detailed troubleshooting, see [docs/install.md](docs/install.md).
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/expressions.md](docs/expressions.md) | Expression syntax, quantifiers, operators |
+| [docs/equations.md](docs/equations.md) | Saved equations and `equations.json` format |
+| [docs/functions.md](docs/functions.md) | Function reference and custom functions |
+| [docs/install.md](docs/install.md) | Installation and setup guide |
 
 ### Verify GPU Setup
 

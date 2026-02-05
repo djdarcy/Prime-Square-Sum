@@ -58,6 +58,11 @@
       },
       "defaults": {"n": 10000, "m": 50},
       "description": "Find where prime power sums equal Fibonacci numbers"
+    },
+    "5": {
+      "name": "verify-stf10",
+      "expression": "verify primesum(7,2) == 666",
+      "description": "Verify stf(10) = 666 from 2010 paper (sum of first 7 squared primes)"
     }
   }
 }

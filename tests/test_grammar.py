@@ -216,10 +216,13 @@ class TestParseErrors:
             parser.parse("")
         assert "Empty expression" in str(exc.value)
 
-    def test_missing_quantifier(self, parser):
-        """Missing quantifier raises ParseError."""
-        with pytest.raises(ParseError):
-            parser.parse("primesum(n,2) == 666")
+    def test_no_quantifier_with_free_vars_parses(self, parser):
+        """Expression without quantifier parses (error happens at find_matches)."""
+        # This now parses successfully - error is deferred to find_matches
+        # because we support implicit verify mode for closed formulas
+        ast = parser.parse("primesum(n,2) == 666")
+        assert ast.quantifier is None  # No quantifier specified
+        assert ast.comparison.right == Literal(666)
 
     def test_invalid_quantifier(self, parser):
         """Invalid quantifier raises ParseError."""
@@ -594,3 +597,154 @@ class TestIntegration:
 
         # 10! = 3,628,800 > 1,000,000
         assert matches[0]["n"] == 10
+
+
+# =============================================================================
+# Verify Quantifier Tests (Issue #34)
+# =============================================================================
+
+class TestVerifyQuantifier:
+    """Test verify quantifier for closed formulas."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    # --- Parsing Tests ---
+
+    def test_parse_explicit_verify(self, parser):
+        """Parse explicit verify quantifier."""
+        ast = parser.parse("verify primesum(7,2) == 666")
+        assert ast.quantifier == "verify"
+        assert ast.comparison.left == FunctionCall("primesum", [Literal(7), Literal(2)])
+        assert ast.comparison.right == Literal(666)
+
+    def test_parse_implicit_verify_no_vars(self, parser):
+        """Parse expression with no quantifier and no free vars."""
+        ast = parser.parse("primesum(7,2) == 666")
+        assert ast.quantifier is None  # Will be auto-detected
+        assert ast.comparison.left == FunctionCall("primesum", [Literal(7), Literal(2)])
+
+    def test_parse_implicit_verify_nested_functions(self, parser):
+        """Parse nested functions with no free vars."""
+        ast = parser.parse("tri(qtri(666)) == 666")
+        assert ast.quantifier is None
+
+    # --- Evaluation Tests ---
+
+    def test_verify_true_result(self, parser, evaluator):
+        """Verify returns true for true closed formula."""
+        expr = parser.parse("verify primesum(7,2) == 666")
+        matches = list(find_matches(expr, evaluator, {}))
+
+        assert len(matches) == 1
+        assert matches[0] == {"__verify_result__": True}
+
+    def test_verify_false_result(self, parser, evaluator):
+        """Verify returns false for false closed formula."""
+        expr = parser.parse("verify primesum(7,2) == 667")
+        matches = list(find_matches(expr, evaluator, {}))
+
+        assert len(matches) == 1
+        assert matches[0] == {"__verify_result__": False}
+
+    def test_implicit_verify_true(self, parser, evaluator):
+        """Implicit verify (no quantifier, no free vars) returns true."""
+        expr = parser.parse("tri(36) == 666")
+        matches = list(find_matches(expr, evaluator, {}))
+
+        assert len(matches) == 1
+        assert matches[0] == {"__verify_result__": True}
+
+    def test_implicit_verify_false(self, parser, evaluator):
+        """Implicit verify returns false for false formula."""
+        expr = parser.parse("tri(36) == 667")
+        matches = list(find_matches(expr, evaluator, {}))
+
+        assert len(matches) == 1
+        assert matches[0] == {"__verify_result__": False}
+
+    def test_verify_nested_functions(self, parser, evaluator):
+        """Verify with nested function calls."""
+        # tri(qtri(666)) = tri(36) = 666
+        expr = parser.parse("verify tri(qtri(666)) == 666")
+        matches = list(find_matches(expr, evaluator, {}))
+
+        assert matches[0] == {"__verify_result__": True}
+
+    def test_verify_comparison_operators(self, parser, evaluator):
+        """Verify works with all comparison operators."""
+        tests = [
+            ("verify tri(36) == 666", True),
+            ("verify tri(36) != 667", True),
+            ("verify tri(36) < 700", True),
+            ("verify tri(36) > 600", True),
+            ("verify tri(36) <= 666", True),
+            ("verify tri(36) >= 666", True),
+        ]
+        for expr_str, expected in tests:
+            expr = parser.parse(expr_str)
+            matches = list(find_matches(expr, evaluator, {}))
+            assert matches[0]["__verify_result__"] == expected, f"Failed for: {expr_str}"
+
+    # --- Error Cases ---
+
+    def test_verify_with_free_vars_raises(self, parser, evaluator):
+        """Verify with free variables raises ValueError."""
+        expr = parser.parse("verify primesum(n,2) == 666")
+
+        with pytest.raises(ValueError) as exc:
+            list(find_matches(expr, evaluator, {}))
+
+        assert "closed formula" in str(exc.value).lower()
+        assert "n" in str(exc.value)
+
+    def test_no_quantifier_with_free_vars_raises(self, parser, evaluator):
+        """No quantifier with free variables raises ValueError."""
+        expr = parser.parse("primesum(n,2) == 666")
+
+        with pytest.raises(ValueError) as exc:
+            list(find_matches(expr, evaluator, {}))
+
+        assert "free variables" in str(exc.value).lower()
+        assert "n" in str(exc.value)
+        assert "does_exist" in str(exc.value) or "for_any" in str(exc.value)
+
+    # --- verify_expression convenience function ---
+
+    def test_verify_expression_function_true(self, parser, evaluator):
+        """verify_expression returns True for true formula."""
+        from utils.grammar import verify_expression
+
+        expr = parser.parse("verify primesum(7,2) == 666")
+        result = verify_expression(expr, evaluator)
+
+        assert result is True
+
+    def test_verify_expression_function_false(self, parser, evaluator):
+        """verify_expression returns False for false formula."""
+        from utils.grammar import verify_expression
+
+        expr = parser.parse("verify primesum(7,2) == 667")
+        result = verify_expression(expr, evaluator)
+
+        assert result is False
+
+    def test_verify_expression_with_free_vars_raises(self, parser, evaluator):
+        """verify_expression raises for formula with free vars."""
+        from utils.grammar import verify_expression
+
+        expr = parser.parse("does_exist primesum(n,2) == 666")
+
+        with pytest.raises(ValueError) as exc:
+            verify_expression(expr, evaluator)
+
+        assert "free variables" in str(exc.value).lower()

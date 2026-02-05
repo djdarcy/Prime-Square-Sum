@@ -197,29 +197,66 @@ class SavedEquation:
     A saved equation definition.
 
     Loaded from equations.json file.
+
+    Supports two formats:
+    1. Decomposed: lhs, operator, quantifier, rhs fields
+    2. Full expression: expression field (e.g., for verify mode)
     """
     id: str
     name: str
-    lhs: str
+    lhs: Optional[str] = None  # For decomposed format
     operator: str = "=="
     quantifier: str = "does_exist"
     rhs: Optional[str] = None
+    expression: Optional[str] = None  # For full expression format (Issue #34)
     is_default: bool = False
     parameters: Dict[str, ParameterDef] = field(default_factory=dict)
     iterators: Dict[str, IteratorDef] = field(default_factory=dict)
     defaults: Dict[str, int] = field(default_factory=dict)
     description: str = ""
 
+    def to_expression_string(self, var_overrides: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Convert to full expression string.
+
+        If 'expression' field is set, returns it directly.
+        Otherwise, builds from components (lhs, operator, rhs, quantifier).
+
+        Args:
+            var_overrides: Dict of parameter overrides from --var flag
+
+        Returns:
+            Full expression string ready for parsing
+        """
+        # If we have a direct expression, use it (e.g., verify equations)
+        if self.expression:
+            return self.expression
+
+        # Otherwise build from components
+        components = self.to_components(var_overrides)
+        return components.to_expression()
+
     def to_components(self, var_overrides: Optional[Dict[str, Any]] = None) -> 'ExpressionComponents':
         """
         Convert to ExpressionComponents with parameter substitution.
+
+        Note: For equations with 'expression' field, use to_expression_string() instead.
 
         Args:
             var_overrides: Dict of parameter overrides from --var flag
 
         Returns:
             ExpressionComponents with parameters substituted
+
+        Raises:
+            ValueError: If equation uses 'expression' format instead of components
         """
+        if self.expression and not self.lhs:
+            raise ValueError(
+                f"Equation '{self.name}' uses 'expression' format. "
+                "Use to_expression_string() instead."
+            )
+
         # Start with equation's LHS and RHS
         lhs = self.lhs
         rhs = self.rhs
@@ -449,18 +486,21 @@ def load_equations_file(path: Optional[Path] = None) -> Optional[EquationsFile]:
                     type=iter_data.get('type', 'int'),
                 )
 
-        # Validate required fields
-        if 'lhs' not in eq_data:
-            warnings.warn(f"Equation '{eq_id}' missing required 'lhs' field, skipping")
+        # Validate required fields - either 'lhs' or 'expression' is required
+        if 'lhs' not in eq_data and 'expression' not in eq_data:
+            warnings.warn(
+                f"Equation '{eq_id}' missing required 'lhs' or 'expression' field, skipping"
+            )
             continue
 
         eq = SavedEquation(
             id=eq_id,
             name=eq_data.get('name', eq_id),
-            lhs=eq_data['lhs'],
+            lhs=eq_data.get('lhs'),  # May be None for expression-based equations
             operator=eq_data.get('operator', '=='),
             quantifier=eq_data.get('quantifier', 'does_exist'),
             rhs=eq_data.get('rhs'),
+            expression=eq_data.get('expression'),  # New: full expression format
             is_default=eq_data.get('default', False),
             parameters=parameters,
             iterators=iterators,
@@ -530,7 +570,11 @@ def print_equations_list(equations_file: Optional[EquationsFile] = None) -> None
         eq = equations_file.equations[eq_id]
         default_marker = " [DEFAULT]" if eq.is_default else ""
         print(f"\n  {eq_id}: {eq.name}{default_marker}")
-        print(f"      {eq.quantifier} {eq.lhs} {eq.operator} {eq.rhs or '<rhs>'}")
+        # Show full expression or decomposed format
+        if eq.expression:
+            print(f"      {eq.expression}")
+        else:
+            print(f"      {eq.quantifier} {eq.lhs} {eq.operator} {eq.rhs or '<rhs>'}")
         if eq.description:
             print(f"      {eq.description}")
         if eq.parameters:
@@ -580,6 +624,16 @@ def _load_equation_expression(args, equations_file: Optional[EquationsFile] = No
     if hasattr(args, 'var') and args.var:
         for var_str in args.var:
             var_overrides.update(parse_var_string(var_str))
+
+    # If equation uses 'expression' format (e.g., verify equations), return directly
+    if eq.expression and not eq.lhs:
+        # Expression-based equations don't support CLI overrides
+        if any([args.lhs, args.rhs, args.operator, args.quantifier]):
+            warnings.warn(
+                f"Equation '{eq.name}' uses 'expression' format. "
+                "CLI overrides (--lhs, --rhs, etc.) are ignored."
+            )
+        return eq.to_expression_string(var_overrides)
 
     # Convert to components with parameter substitution
     components = eq.to_components(var_overrides)
@@ -795,17 +849,29 @@ def show_config(
 # Output Formatting
 # =============================================================================
 
-def format_match(match: Dict[str, int], format_type: str = "text") -> str:
+def format_match(match: Dict[str, Any], format_type: str = "text") -> str:
     """
     Format a match result for output.
 
     Args:
-        match: Dictionary mapping variable names to values
+        match: Dictionary mapping variable names to values, or
+               {"__verify_result__": bool} for verify mode
         format_type: One of "text", "json", "csv"
 
     Returns:
         Formatted string
     """
+    # Handle verify mode result
+    if "__verify_result__" in match:
+        result = match["__verify_result__"]
+        if format_type == "json":
+            return json.dumps({"verified": result})
+        elif format_type == "csv":
+            return "true" if result else "false"
+        else:  # text
+            return "true" if result else "false"
+
+    # Standard match result
     if format_type == "json":
         return json.dumps({"found": True, "variables": match})
     elif format_type == "csv":

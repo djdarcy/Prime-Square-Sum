@@ -1,0 +1,74 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Verify Expression",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prime-square-sum.py",
+            "args": ["--expr", "verify primesum(7,2) == 666"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Target 666",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prime-square-sum.py",
+            "args": ["--target", "666", "-v"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Target with Algorithm",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prime-square-sum.py",
+            "args": ["--target", "666", "--algorithm", "sieve:segmented", "-v"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Expression Query",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prime-square-sum.py",
+            "args": ["--expr", "does_exist primesum(n,2) == 666"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Run All Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["tests/", "-v"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Debug Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Custom Command",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prime-square-sum.py",
+            "args": "${input:customArgs}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ],
+    "inputs": [
+        {
+            "id": "customArgs",
+            "type": "promptString",
+            "description": "Enter command-line arguments (e.g., --target 666 -v)"
+        }
+    ]
+}

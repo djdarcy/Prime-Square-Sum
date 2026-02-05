@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.6] - 2026-02-05
+
+### Added
+- **`verify` quantifier for closed formulas** (Issue #34)
+  - Explicit: `--expr "verify primesum(7,2) == 666"` returns `true`/`false`
+  - Implicit: `--expr "primesum(7,2) == 666"` auto-detects verify mode (no free variables)
+  - JSON output: `{"verified": true}` or `{"verified": false}`
+  - `verify_expression()` convenience function in grammar module
+- **VSCode debug configuration** (Issue #32)
+  - `.vscode/launch.json` with 7 configurations:
+    - "Verify Expression" - test verify quantifier
+    - "Target 666" - standard target search
+    - "Target with Algorithm" - test sieve algorithms
+    - "Expression Query" - test does_exist quantifier
+    - "Run All Tests" - pytest integration
+    - "Debug Current File" - generic debugging
+    - "Custom Command" - user input prompt for any arguments
+  - `.vscode/settings.json` with Python testing config
+  - `.vscode/` removed from `.gitignore` for shared configs
+- `verify-stf10` equation added to `equations.json` - verifies stf(10) = 666
+- **Documentation** for expression system
+  - `docs/expressions.md` - Expression syntax, quantifiers, operators
+  - `docs/equations.md` - Saved equations and `equations.json` format
+  - `docs/functions.md` - Function reference and custom functions
+- 17 new tests for verify quantifier
+
+### Removed
+- **`--verify` flag deprecated and removed**
+  - Replaced by `--expr "verify primesum(7,2) == 666"`
+  - Or use `--equation verify-stf10` for the classic verification
+
+### Technical Notes
+- Grammar now supports optional quantifier: `[quantifier] comparison`
+- Auto-detection: no quantifier + no free variables → verify mode
+- Error if no quantifier but expression has free variables
+- Error if `verify` used with free variables
+
+### Related Issues
+- Issue #34: Add 'verify' quantifier for closed-formula evaluation (complete)
+- Issue #32: VSCode debug configuration (complete)
+
+### Design Documents
+- `2026-02-05__02-08-55__verify-quantifier-and-vscode-config.md`
+
 ## [0.7.5] - 2026-02-04
 
 ### Added

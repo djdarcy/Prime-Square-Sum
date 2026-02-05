@@ -11,7 +11,8 @@ Provides:
 Target syntax examples:
     does_exist primesum(n,2) == 666
     for_any primesum(n,2) == tri(m)
-    does_exist tri(n) == trisum(qtri(666))
+    verify primesum(7,2) == 666
+    primesum(7,2) == 666              # implicit verify (no free vars)
 
 Issue: #17 (Expression parser with AST)
 Epic: #13 (Generalized Expression Grammar)
@@ -71,7 +72,7 @@ class Comparison(ASTNode):
 @dataclass
 class Expression(ASTNode):
     """A complete expression with quantifier and comparison."""
-    quantifier: str  # "for_any" or "does_exist"
+    quantifier: Optional[str]  # "for_any", "does_exist", "verify", or None (auto-detect)
     comparison: Comparison
 
 
@@ -80,10 +81,11 @@ class Expression(ASTNode):
 # =============================================================================
 
 GRAMMAR = r"""
-    start: quantifier comparison
+    start: [quantifier] comparison
 
     quantifier: "for_any" -> for_any
               | "does_exist" -> does_exist
+              | "verify" -> verify
 
     comparison: term COMP_OP term
 
@@ -115,7 +117,13 @@ GRAMMAR = r"""
 class ASTTransformer(Transformer):
     """Transform Lark parse tree into AST dataclasses."""
 
-    def start(self, quantifier: str, comparison: Comparison) -> Expression:
+    def start(self, *args) -> Expression:
+        if len(args) == 2:
+            quantifier, comparison = args
+        else:
+            # No quantifier specified - will be auto-detected in find_matches
+            comparison = args[0]
+            quantifier = None
         return Expression(quantifier=quantifier, comparison=comparison)
 
     def for_any(self) -> str:
@@ -123,6 +131,9 @@ class ASTTransformer(Transformer):
 
     def does_exist(self) -> str:
         return "does_exist"
+
+    def verify(self) -> str:
+        return "verify"
 
     def comparison(self, left: ASTNode, op, right: ASTNode) -> Comparison:
         return Comparison(left=left, operator=str(op), right=right)
@@ -351,12 +362,13 @@ def find_matches(
     expr: Expression,
     evaluator: ExpressionEvaluator,
     bounds: Dict[str, int]
-) -> Iterator[Dict[str, int]]:
+) -> Iterator[Dict[str, Any]]:
     """
     Find all variable assignments that satisfy the expression.
 
     For does_exist quantifier, yields the first match and stops.
     For for_any quantifier, yields all matches.
+    For verify quantifier (or auto-detected), yields {"__verify_result__": bool}.
 
     Args:
         expr: Parsed expression with quantifier
@@ -364,10 +376,13 @@ def find_matches(
         bounds: Max values for each free variable {var_name: max_value}
 
     Yields:
-        Dict mapping variable names to values that satisfy comparison
+        Dict mapping variable names to values that satisfy comparison,
+        or {"__verify_result__": bool} for verify mode
 
     Raises:
         ValueError: If a free variable has no bound specified
+        ValueError: If verify mode is used with free variables
+        ValueError: If no quantifier and expression has free variables
 
     Example:
         parser = ExpressionParser()
@@ -377,10 +392,37 @@ def find_matches(
         expr = parser.parse("does_exist primesum(n,2) == 666")
         for match in find_matches(expr, evaluator, {'n': 100}):
             print(match)  # {'n': 7}
+
+        expr = parser.parse("verify primesum(7,2) == 666")
+        for match in find_matches(expr, evaluator, {}):
+            print(match)  # {'__verify_result__': True}
     """
     free_vars = find_free_variables(expr)
+    quantifier = expr.quantifier
 
-    # Validate all free variables have bounds
+    # Auto-detect quantifier when not specified
+    if quantifier is None:
+        if free_vars:
+            raise ValueError(
+                f"Expression has free variables ({', '.join(sorted(free_vars))}) but no quantifier. "
+                f"Use 'does_exist' or 'for_any' prefix, e.g.: does_exist {expr.comparison}"
+            )
+        # No free vars and no quantifier -> implicit verify mode
+        quantifier = "verify"
+
+    # Validate verify mode - must have no free variables
+    if quantifier == "verify":
+        if free_vars:
+            raise ValueError(
+                f"'verify' requires a closed formula (no free variables), "
+                f"but found: {', '.join(sorted(free_vars))}"
+            )
+        # Evaluate and yield result
+        result = evaluator.evaluate(expr.comparison, {})
+        yield {"__verify_result__": bool(result)}
+        return
+
+    # Validate all free variables have bounds (for does_exist / for_any)
     missing = free_vars - set(bounds.keys())
     if missing:
         missing_list = sorted(missing)
@@ -390,7 +432,7 @@ def find_matches(
             f"Use {suggestions} to specify."
         )
 
-    # Handle no-variable case (e.g., "does_exist tri(4) == 10")
+    # Handle no-variable case for does_exist/for_any (e.g., "does_exist tri(4) == 10")
     if not free_vars:
         if evaluator.evaluate(expr.comparison, {}):
             yield {}
@@ -405,9 +447,42 @@ def find_matches(
         try:
             if evaluator.evaluate(expr.comparison, context):
                 yield context.copy()
-                if expr.quantifier == "does_exist":
+                if quantifier == "does_exist":
                     return  # Stop at first match
         except EvaluationError:
             # Skip combinations that cause evaluation errors
             # (e.g., primesum(-1, 2) when iteration somehow produces invalid args)
             continue
+
+
+def verify_expression(
+    expr: Expression,
+    evaluator: ExpressionEvaluator
+) -> bool:
+    """
+    Evaluate a closed-formula expression and return boolean result.
+
+    Convenience function for verify mode that returns a simple boolean
+    instead of an iterator.
+
+    Args:
+        expr: Parsed expression (should have no free variables)
+        evaluator: Expression evaluator with function registry
+
+    Returns:
+        True if the expression evaluates to true, False otherwise
+
+    Raises:
+        ValueError: If expression has free variables
+
+    Example:
+        expr = parser.parse("verify primesum(7,2) == 666")
+        result = verify_expression(expr, evaluator)  # True
+    """
+    free_vars = find_free_variables(expr)
+    if free_vars:
+        raise ValueError(
+            f"verify_expression requires closed formula, "
+            f"but found free variables: {', '.join(sorted(free_vars))}"
+        )
+    return bool(evaluator.evaluate(expr.comparison, {}))

@@ -23,7 +23,7 @@ ENV/
 .venv/
 
 # IDE
-.vscode/
+# Note: .vscode/ is committed for shared debug configs
 .idea/
 *.swp
 *.swo

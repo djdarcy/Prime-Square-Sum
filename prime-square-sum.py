@@ -16,8 +16,8 @@ Usage:
     python prime-square-sum.py --target 666
     python prime-square-sum.py --lhs "primesum(n,3)" --target 666
 
-    # Quick verification
-    python prime-square-sum.py --verify 666
+    # Verify known result (no iteration)
+    python prime-square-sum.py --expr "verify primesum(7,2) == 666"
 
     # List available functions
     python prime-square-sum.py --list-functions
@@ -90,8 +90,11 @@ Examples:
   # Use cubed primes instead of squared
   %(prog)s --lhs "primesum(n,3)" --target 666
 
-  # Quick verification of known result
-  %(prog)s --verify 666
+  # Verify known result (no search, returns true/false)
+  %(prog)s --expr "verify primesum(7,2) == 666"
+
+  # Implicit verify (auto-detected when no free variables)
+  %(prog)s --expr "primesum(7,2) == 666"
 
   # List all available mathematical functions
   %(prog)s --list-functions
@@ -99,6 +102,7 @@ Examples:
 Quantifiers:
   does_exist  Find first match and stop (default)
   for_any     Find all matches within bounds
+  verify      Evaluate closed formula, return true/false
 
 Comparison operators: ==, !=, <, >, <=, >=
         """
@@ -190,11 +194,6 @@ Comparison operators: ==, !=, <, >, <=, >=
 
     # === Convenience Commands ===
     parser.add_argument(
-        '--verify',
-        metavar='VALUE',
-        help='Quick verification (e.g., --verify 666)'
-    )
-    parser.add_argument(
         '--list-functions',
         action='store_true',
         help='List all available mathematical functions'
@@ -252,33 +251,6 @@ Comparison operators: ==, !=, <, >, <=, >=
 # =============================================================================
 # Command Handlers
 # =============================================================================
-
-def verify_666(use_gpu: bool = True) -> bool:
-    """Quick verification that sum of first 7 squared primes = 666."""
-    print("Verifying: stf(10) = 666 = sum of first 7 squared primes")
-    print()
-
-    primes = generate_n_primes(7)
-    print(f"First 7 primes: {primes.tolist()}")
-
-    if use_gpu and gpu_utils.GPU_AVAILABLE:
-        total = gpu_utils.power_sum(primes, power=2, use_gpu=True)
-        print(f"Sum (GPU): {total}")
-    else:
-        squares = [int(p)**2 for p in primes]
-        print(f"Squares: {squares}")
-        total = sum(squares)
-        print(f"Sum: {' + '.join(map(str, squares))} = {total}")
-
-    print()
-
-    if total == 666:
-        print("VERIFIED: stf(10) = 666")
-        return True
-    else:
-        print(f"FAILED: Expected 666, got {total}")
-        return False
-
 
 def handle_list_functions(registry: FunctionRegistry) -> int:
     """List all available functions."""
@@ -521,17 +493,6 @@ def main():
     if args.list_equations:
         print_equations_list()
         return 0
-
-    # Verify mode
-    if args.verify:
-        target = int(args.verify)
-        if target == 666:
-            success = verify_666(use_gpu=not args.no_gpu)
-            return 0 if success else 1
-        else:
-            # For other values, run as expression
-            args.expr = f"does_exist primesum(n,2) == {target}"
-            args.rhs = None  # Clear to avoid conflict
 
     # === Main Expression Evaluation ===
 
