@@ -58,7 +58,12 @@ from utils.cli import (
     load_config,
     show_config,
 )
-from utils.sieve import generate_n_primes, PRIMESIEVE_AVAILABLE
+from utils.sieve import (
+    generate_n_primes, PRIMESIEVE_AVAILABLE,
+    get_available_algorithms, get_algorithm_info, configure as configure_sieve,
+    ALGORITHM_AUTO, ALGORITHM_PRIMESIEVE, ALGORITHM_BASIC,
+    ALGORITHM_SEGMENTED, ALGORITHM_INDIVIDUAL,
+)
 from utils import gpu as gpu_utils
 
 
@@ -211,6 +216,29 @@ Comparison operators: ==, !=, <, >, <=, >=
         help='Disable GPU acceleration'
     )
 
+    # === Algorithm Selection (Issue #29) ===
+    parser.add_argument(
+        '--algorithm',
+        metavar='CLASS:VARIANT',
+        help='Algorithm selection (e.g., sieve:segmented, sieve:basic, sieve:individual)'
+    )
+    parser.add_argument(
+        '--prefer',
+        choices=['cpu', 'gpu', 'memory', 'minimal'],
+        help='Resource preference hint for auto-selection'
+    )
+    parser.add_argument(
+        '--max-memory',
+        type=int,
+        metavar='MB',
+        help='Maximum memory usage in MB for sieve operations'
+    )
+    parser.add_argument(
+        '--list-algorithms',
+        action='store_true',
+        help='List available algorithm variants'
+    )
+
     # === Version ===
     parser.add_argument(
         '--version',
@@ -260,6 +288,47 @@ def handle_list_functions(registry: FunctionRegistry) -> int:
         print(f"  {description}")
     print("=" * 60)
     print(f"\nTotal: {len(registry)} functions")
+    return 0
+
+
+def handle_list_algorithms() -> int:
+    """List all available algorithm variants."""
+    print("\nAvailable Algorithm Variants:")
+    print("=" * 60)
+
+    info = get_algorithm_info()
+    available = get_available_algorithms()
+
+    # Group by class (currently only sieve)
+    print("\nSieve Algorithms (--algorithm sieve:<variant>):")
+    print("-" * 50)
+
+    for algo in [ALGORITHM_AUTO, ALGORITHM_PRIMESIEVE, ALGORITHM_BASIC,
+                 ALGORITHM_SEGMENTED, ALGORITHM_INDIVIDUAL]:
+        algo_info = info.get(algo, {})
+        status = "OK" if algo_info.get("available", False) else "NOT INSTALLED"
+        desc = algo_info.get("description", "")
+        time_c = algo_info.get("complexity_time", "")
+        space_c = algo_info.get("complexity_space", "")
+
+        print(f"  {algo:12} [{status}]")
+        print(f"               {desc}")
+        if time_c:
+            print(f"               Time: {time_c}, Space: {space_c}")
+        print()
+
+    print("Usage:")
+    print("  --algorithm sieve:auto        Auto-select best available")
+    print("  --algorithm sieve:segmented   Force segmented (bounded memory)")
+    print("  --algorithm sieve:basic       Force basic sieve")
+    print("  --algorithm sieve:individual  Force individual testing")
+    print()
+    print("Resource preferences (--prefer):")
+    print("  cpu      Prefer CPU-intensive algorithms")
+    print("  memory   Prefer faster algorithms even if memory-heavy")
+    print("  minimal  Prefer minimal memory usage")
+    print("  gpu      Prefer GPU acceleration where available")
+
     return 0
 
 
@@ -341,9 +410,57 @@ def handle_expression(args, registry: FunctionRegistry) -> int:
 # Main Entry Point
 # =============================================================================
 
+def parse_algorithm_arg(algo_str: str) -> tuple:
+    """
+    Parse --algorithm argument in 'class:variant' format.
+
+    Args:
+        algo_str: String like "sieve:segmented"
+
+    Returns:
+        Tuple of (class, variant)
+
+    Raises:
+        ValueError: If format is invalid
+    """
+    if ':' not in algo_str:
+        raise ValueError(
+            f"Invalid algorithm format: {algo_str}\n"
+            f"Expected format: class:variant (e.g., sieve:segmented)"
+        )
+
+    parts = algo_str.split(':', 1)
+    return parts[0].lower(), parts[1].lower()
+
+
 def main():
     parser = create_parser()
     args = parser.parse_args()
+
+    # Configure sieve algorithm (Issue #29)
+    if args.algorithm:
+        try:
+            algo_class, algo_variant = parse_algorithm_arg(args.algorithm)
+            if algo_class == "sieve":
+                configure_sieve(algorithm=algo_variant)
+                if args.verbose:
+                    print(f"[INFO] Sieve algorithm: {algo_variant}")
+            else:
+                print(f"Warning: Unknown algorithm class '{algo_class}', ignoring",
+                      file=sys.stderr)
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+    if args.max_memory:
+        configure_sieve(max_memory_mb=args.max_memory)
+        if args.verbose:
+            print(f"[INFO] Max memory: {args.max_memory} MB")
+
+    if args.prefer:
+        configure_sieve(prefer=args.prefer)
+        if args.verbose:
+            print(f"[INFO] Resource preference: {args.prefer}")
 
     # Initialize GPU (if not disabled)
     if not args.no_gpu:
@@ -370,6 +487,10 @@ def main():
     # List functions
     if args.list_functions:
         return handle_list_functions(registry)
+
+    # List algorithms (Issue #29)
+    if args.list_algorithms:
+        return handle_list_algorithms()
 
     # Show config (Issue #22)
     if args.show_config:
