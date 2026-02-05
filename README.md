@@ -8,7 +8,7 @@
 
 The python program squares primes and sums them together to determine if:
 
-![stf(b) = sum_(z=1)^qg(b) tf(b,z);](/paper%20and%20notes/function-stf-defined.png?raw=true "stf defined")
+![stf(b) = sum_(z=1)^qg(b) tf(b,z);](<paper and notes/function-stf-defined.png> "stf defined")
 
 is equal to a series of squared primes.
 
@@ -20,7 +20,7 @@ z = row in the triangular number;  //ex. tf(10,4)=0123; tf(10,3)=456; tf(10,2)=7
 
 Where tf() is defined to be:
 
-![tf(b,z) = (-2 + 2b - 2b^2 + z - bz - z^2 + bz^2 + b^z(2 + 2b^2 + z + z^2 - b(2 + z + z^2))) / (2(-1 + b)^2)](/paper%20and%20notes/function-tf-defined.png?raw=true "tf defined")
+![tf(b,z) = (-2 + 2b - 2b^2 + z - bz - z^2 + bz^2 + b^z(2 + 2b^2 + z + z^2 - b(2 + z + z^2))) / (2(-1 + b)^2)](<paper and notes/function-tf-defined.png> "tf defined")
 
 There is an interesting relationship when `{b=10, r=4}` where the sum of the triangular rows in base-10, `0123 + 456 + 78 + 9`, happens to work out to be the sum of the first seven squared primes.
 
@@ -39,12 +39,17 @@ So I've adapted it to work with multiprocessing and CUDA (via CuPy) to speed up 
 ## Usage
 
 ```bash
-# Find n where sum of squared primes equals 666
-python prime-square-sum.py --target 666
-
-# Use expression syntax for complex queries
+# Find n where sum of first n squared primes equals 666
 python prime-square-sum.py --expr "does_exist primesum(n,2) == 666"
+# Output: Found: n=7  (because 2² + 3² + 5² + 7² + 11² + 13² + 17² = 666)
 
+# Shorthand using default expression
+python prime-square-sum.py --target 666
+```
+
+The `--target` flag searches against the **default expression** `primesum(n,2)` (sum of squared primes). This default is defined in `equations.json` and can be customized via `config.json`. See [docs/equations.md](docs/equations.md) for details.
+
+```bash
 # Find matches between prime sums and triangular numbers
 python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 --max-m 50
 
