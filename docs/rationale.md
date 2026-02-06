@@ -25,7 +25,7 @@ Some functions can be inverted algebraically:
 | Function | Forward | Inverse |
 |----------|---------|---------|
 | `tri(n) = (n² + n) / 2` | `tri(36) = 666` | `qtri(666) = (-1 + √5329) / 2 = 36` |
-| `square(n) = n²` | `square(5) = 25` | `√25 = 5` |
+| `pow(n, 2) = n²` | `pow(5, 2) = 25` | `√25 = 5` |
 | Polynomial roots | `(n+3)² = 49` | Quadratic formula: `n = 4` |
 
 For these, the expression system is **convenient** but not **necessary** - you could solve them on paper.

@@ -29,12 +29,61 @@ Security Warning:
 """
 
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Any, List
+from typing import Callable, Dict, Optional, Any, List, Union
 import inspect
 import importlib.util
+import math as _math
 import warnings
 import sys
 from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Math function wrappers
+# ---------------------------------------------------------------------------
+# Thin wrappers around Python builtins/math module so that
+# inspect.signature() works and docstrings display nicely.
+# These are registered as builtins in FunctionRegistry._register_builtins().
+
+def _builtin_pow(base: Union[int, float], exp: Union[int, float]) -> Union[int, float]:
+    """Raise base to the power of exp."""
+    return base ** exp
+
+
+def _builtin_abs(x: Union[int, float]) -> Union[int, float]:
+    """Return the absolute value of x."""
+    return abs(x)
+
+
+def _builtin_mod(a: Union[int, float], b: Union[int, float]) -> Union[int, float]:
+    """Return a modulo b (remainder of a / b)."""
+    if b == 0:
+        raise ValueError("mod() division by zero")
+    return a % b
+
+
+def _builtin_sqrt(x: Union[int, float]) -> Union[int, float]:
+    """Return the square root of x. Returns int if result is integral."""
+    if x < 0:
+        raise ValueError(f"sqrt() requires non-negative input, got {x}")
+    result = _math.isqrt(x) if isinstance(x, int) else _math.sqrt(x)
+    # For integer inputs, isqrt returns exact int; verify it's a perfect square
+    if isinstance(x, int):
+        if result * result == x:
+            return result
+        # Not a perfect square - return float
+        return _math.sqrt(x)
+    return result
+
+
+def _builtin_floor(x: Union[int, float]) -> int:
+    """Round x down to the nearest integer."""
+    return _math.floor(x)
+
+
+def _builtin_ceil(x: Union[int, float]) -> int:
+    """Round x up to the nearest integer."""
+    return _math.ceil(x)
 
 
 @dataclass
@@ -82,7 +131,7 @@ class FunctionRegistry:
         from utils.sieve import nth_prime
 
         # Import from sequences
-        from utils.sequences import primesum, fibonacci, factorial, catalan, square
+        from utils.sequences import primesum, fibonacci, factorial, catalan
 
         # Register each built-in function
         builtins = [
@@ -100,8 +149,13 @@ class FunctionRegistry:
             ("fibonacci", fibonacci),
             ("factorial", factorial),
             ("catalan", catalan),
-            # Basic arithmetic
-            ("square", square),
+            # Math functions (v0.7.8+)
+            ("pow", _builtin_pow),
+            ("abs", _builtin_abs),
+            ("mod", _builtin_mod),
+            ("sqrt", _builtin_sqrt),
+            ("floor", _builtin_floor),
+            ("ceil", _builtin_ceil),
         ]
 
         for name, func in builtins:

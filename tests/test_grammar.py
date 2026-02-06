@@ -894,11 +894,9 @@ class TestIteratorFactories:
         """FloatIterator works with find_matches."""
         from utils.iterators import FloatIterator
 
-        # Use the built-in square function with a float iterator
-        # This tests that float iteration works correctly with the grammar
-        # square(0.5) == 0.25, and 0.5 should be in the iteration range
-
-        expr = parser.parse("does_exist square(x) == 0.25")
+        # Use the built-in pow function with a float iterator
+        # pow(0.5, 2) == 0.25, and 0.5 should be in the iteration range
+        expr = parser.parse("does_exist pow(x, 2) == 0.25")
 
         results = list(find_matches(
             expr, evaluator, {},

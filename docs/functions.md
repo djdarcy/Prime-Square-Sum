@@ -118,6 +118,67 @@ digital_root(666) = 9     # 6+6+6 = 18, 1+8 = 9
 digital_root(12345) = 6   # 1+2+3+4+5 = 15, 1+5 = 6
 ```
 
+### Math Functions (v0.7.8+)
+
+Built-in wrappers around Python's math operations.
+
+#### `pow(base, exp)`
+Raise base to the power of exp.
+
+**Examples:**
+```
+pow(5, 2) = 25        # 5 squared
+pow(2, 10) = 1024     # 2^10
+pow(0.5, 2) = 0.25    # works with floats
+```
+
+#### `abs(x)`
+Return the absolute value of x.
+
+**Examples:**
+```
+abs(-5) = 5
+abs(3) = 3
+```
+
+#### `mod(a, b)`
+Return a modulo b (remainder of a / b).
+
+**Examples:**
+```
+mod(10, 3) = 1
+mod(7, 2) = 1
+mod(6, 3) = 0
+```
+
+#### `sqrt(x)`
+Return the square root of x. Returns int for perfect squares, float otherwise.
+
+**Examples:**
+```
+sqrt(25) = 5          # perfect square → int
+sqrt(2) = 1.41421...  # not perfect → float
+sqrt(144) = 12
+```
+
+#### `floor(x)`
+Round x down to the nearest integer.
+
+**Examples:**
+```
+floor(3.7) = 3
+floor(-1.5) = -2
+```
+
+#### `ceil(x)`
+Round x up to the nearest integer.
+
+**Examples:**
+```
+ceil(3.2) = 4
+ceil(-1.5) = -1
+```
+
 ## Custom Functions
 
 You can define custom functions in a Python file and load them with `--functions`:
@@ -127,10 +188,6 @@ You can define custom functions in a Python file and load them with `--functions
 Create a file `my_funcs.py`:
 
 ```python
-def square(n):
-    """Return n squared."""
-    return n * n
-
 def sum_of_digits(n):
     """Sum of digits of n."""
     return sum(int(d) for d in str(abs(n)))

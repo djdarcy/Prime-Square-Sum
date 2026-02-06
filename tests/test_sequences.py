@@ -295,6 +295,6 @@ class TestFunctionRegistryIntegration:
 
         # 6 original (tri, qtri, trisum, is_triangular, digital_root, nth_prime)
         # + 4 sequences (primesum, fibonacci, factorial, catalan)
-        # + 1 arithmetic (square)
-        # = 11 total
-        assert len(registry) == 11
+        # + 6 math functions (pow, abs, mod, sqrt, floor, ceil)
+        # = 16 total
+        assert len(registry) == 16

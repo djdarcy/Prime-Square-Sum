@@ -202,30 +202,6 @@ def catalan(n: Union[int, float]) -> int:
     return math_factorial(2 * n) // (math_factorial(n + 1) * math_factorial(n))
 
 
-def square(x: Union[int, float]) -> Union[int, float]:
-    """
-    Calculate x squared.
-
-    A basic arithmetic function that returns x * x.
-    Accepts both integers and floats.
-
-    Args:
-        x: Number to square
-
-    Returns:
-        x squared (x * x)
-
-    Examples:
-        >>> square(5)
-        25
-        >>> square(0.5)
-        0.25
-        >>> square(-3)
-        9
-    """
-    return x * x
-
-
 # Quick verification when run directly
 if __name__ == "__main__":
     print("Sequence generators verification")

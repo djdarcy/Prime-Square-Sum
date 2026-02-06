@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.8] - 2026-02-06
+
+### Added
+- **Math function builtins** (Issue #44 Phase 1)
+  - `pow(base, exp)` - exponentiation, replaces `square()`
+  - `abs(x)` - absolute value
+  - `mod(a, b)` - modulo with division-by-zero validation
+  - `sqrt(x)` - square root, returns int for perfect squares
+  - `floor(x)` - round down to nearest integer
+  - `ceil(x)` - round up to nearest integer
+  - Wrappers provide proper `inspect.signature()` support
+- 20 new math function tests - 529 total tests passing
+
+### Removed
+- **`square()` function** removed from `utils/sequences.py` and FunctionRegistry
+  - Use `pow(x, 2)` instead
+  - Eliminates collision risk with user-defined `square()` via `--functions`
+
+### Related Issues
+- Issue #44: Extend expression grammar with math functions (Phase 1 complete)
+- Issue #46: Function namespace and collision prevention (motivated by growing builtin count)
+
+### Design Documents
+- `2026-02-05__21-59-32__grammar-arithmetic-operators-analysis.md`
+- `2026-02-06__09-16-47__function-namespace-collision-prevention.md`
+
 ## [0.7.7] - 2026-02-05
 
 ### Added

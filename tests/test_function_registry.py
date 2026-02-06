@@ -392,6 +392,119 @@ class TestContainerProtocol:
         assert "qtri" in names
 
 
+class TestMathFunctions:
+    """Tests for built-in math functions (v0.7.8+)."""
+
+    def test_math_functions_registered(self):
+        """Test that all math functions are registered."""
+        registry = FunctionRegistry()
+        for name in ["pow", "abs", "mod", "sqrt", "floor", "ceil"]:
+            assert name in registry, f"{name} not registered"
+
+    def test_pow_integers(self):
+        """Test pow() with integer arguments."""
+        registry = FunctionRegistry()
+        fn = registry.get("pow")
+        assert fn(2, 3) == 8
+        assert fn(5, 2) == 25
+        assert fn(10, 0) == 1
+
+    def test_pow_replaces_square(self):
+        """Test pow(x, 2) produces same results as x*x."""
+        registry = FunctionRegistry()
+        pow_fn = registry.get("pow")
+        for x in [0, 1, 5, -3, 100]:
+            assert pow_fn(x, 2) == x * x
+        # square() is no longer a registered builtin
+        assert "square" not in registry
+
+    def test_pow_floats(self):
+        """Test pow() with float arguments."""
+        registry = FunctionRegistry()
+        fn = registry.get("pow")
+        assert fn(0.5, 2) == 0.25
+        assert abs(fn(2, 0.5) - 1.4142135623730951) < 1e-10
+
+    def test_abs_positive(self):
+        """Test abs() with positive input."""
+        registry = FunctionRegistry()
+        fn = registry.get("abs")
+        assert fn(5) == 5
+        assert fn(0) == 0
+
+    def test_abs_negative(self):
+        """Test abs() with negative input."""
+        registry = FunctionRegistry()
+        fn = registry.get("abs")
+        assert fn(-5) == 5
+        assert fn(-3.14) == 3.14
+
+    def test_mod_basic(self):
+        """Test mod() basic behavior."""
+        registry = FunctionRegistry()
+        fn = registry.get("mod")
+        assert fn(10, 3) == 1
+        assert fn(7, 2) == 1
+        assert fn(6, 3) == 0
+
+    def test_mod_division_by_zero(self):
+        """Test mod() raises on division by zero."""
+        registry = FunctionRegistry()
+        fn = registry.get("mod")
+        with pytest.raises(ValueError, match="division by zero"):
+            fn(5, 0)
+
+    def test_sqrt_perfect_square(self):
+        """Test sqrt() returns int for perfect squares."""
+        registry = FunctionRegistry()
+        fn = registry.get("sqrt")
+        assert fn(25) == 5
+        assert isinstance(fn(25), int)
+        assert fn(0) == 0
+        assert fn(1) == 1
+        assert fn(144) == 12
+
+    def test_sqrt_non_perfect_square(self):
+        """Test sqrt() returns float for non-perfect squares."""
+        registry = FunctionRegistry()
+        fn = registry.get("sqrt")
+        result = fn(2)
+        assert isinstance(result, float)
+        assert abs(result - 1.4142135623730951) < 1e-10
+
+    def test_sqrt_negative_raises(self):
+        """Test sqrt() raises on negative input."""
+        registry = FunctionRegistry()
+        fn = registry.get("sqrt")
+        with pytest.raises(ValueError, match="non-negative"):
+            fn(-1)
+
+    def test_floor_basic(self):
+        """Test floor() rounds down."""
+        registry = FunctionRegistry()
+        fn = registry.get("floor")
+        assert fn(3.7) == 3
+        assert fn(3.0) == 3
+        assert fn(-1.5) == -2
+
+    def test_ceil_basic(self):
+        """Test ceil() rounds up."""
+        registry = FunctionRegistry()
+        fn = registry.get("ceil")
+        assert fn(3.2) == 4
+        assert fn(3.0) == 3
+        assert fn(-1.5) == -1
+
+    def test_math_functions_have_metadata(self):
+        """Test that math functions have proper signatures."""
+        registry = FunctionRegistry()
+        for name in ["pow", "abs", "mod", "sqrt", "floor", "ceil"]:
+            sig = registry.get_signature(name)
+            assert sig.arg_count >= 1, f"{name} should have at least 1 arg"
+            assert len(sig.doc) > 0, f"{name} should have a docstring"
+            assert sig.source == "builtin"
+
+
 class TestEdgeCases:
     """Tests for edge cases."""
 
