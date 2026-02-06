@@ -28,6 +28,8 @@ Usage:
 from typing import Optional
 import math
 
+from utils.types import _ensure_int
+
 
 def digital_root(n) -> int:
     """
@@ -253,10 +255,14 @@ def tri(n: int) -> int:
     Formula: T(n) = n(n+1)/2 = (n² + n) / 2
 
     Args:
-        n: Non-negative integer index
+        n: Non-negative integer index (accepts integral floats like 36.0)
 
     Returns:
         The nth triangular number
+
+    Raises:
+        ValueError: If n is negative or non-integral float
+        TypeError: If n is not a numeric type
 
     Examples:
         >>> tri(0)
@@ -267,12 +273,17 @@ def tri(n: int) -> int:
         10  # 1 + 2 + 3 + 4 = 10
         >>> tri(36)
         666  # Key relationship from Zero_AG paper
+        >>> tri(36.0)
+        666  # Integral floats accepted
+        >>> tri(36.5)
+        ValueError: tri() requires integral value, got 36.5
 
     Mathematical context:
         - tri(4) = 10 represents all digits in base-10 (0-9)
         - tri(36) = 666, connecting to many mystical number patterns
         - The entire positive number line can be viewed as tri(∞)
     """
+    n = _ensure_int(n, "tri")
     if n < 0:
         raise ValueError(f"tri() requires non-negative n, got {n}")
     return (n * n + n) // 2
@@ -286,10 +297,14 @@ def qtri(x: int) -> Optional[int]:
     Using quadratic formula: n = (-1 + √(1 + 8x)) / 2
 
     Args:
-        x: Value to test
+        x: Value to test (accepts integral floats like 666.0)
 
     Returns:
         n such that tri(n) = x, or None if x is not triangular
+
+    Raises:
+        ValueError: If x is a non-integral float
+        TypeError: If x is not a numeric type
 
     Examples:
         >>> qtri(0)
@@ -300,14 +315,19 @@ def qtri(x: int) -> Optional[int]:
         4  # tri(4) = 10
         >>> qtri(666)
         36  # tri(36) = 666
+        >>> qtri(666.0)
+        36  # Integral floats accepted
         >>> qtri(5)
         None  # 5 is not a triangular number
         >>> qtri(7)
         None  # 7 is not a triangular number
+        >>> qtri(666.5)
+        ValueError: qtri() requires integral value, got 666.5
 
     Note:
         This is an O(1) operation using the closed-form inverse formula.
     """
+    x = _ensure_int(x, "qtri")
     if x < 0:
         return None
     if x == 0:
@@ -342,10 +362,14 @@ def is_triangular(x: int) -> bool:
     Sequence: 0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, ...
 
     Args:
-        x: Value to check
+        x: Value to check (accepts integral floats like 666.0)
 
     Returns:
         True if x is triangular, False otherwise
+
+    Raises:
+        ValueError: If x is a non-integral float
+        TypeError: If x is not a numeric type
 
     Examples:
         >>> is_triangular(0)
@@ -358,10 +382,14 @@ def is_triangular(x: int) -> bool:
         True
         >>> is_triangular(666)
         True  # tri(36) = 666
+        >>> is_triangular(666.0)
+        True  # Integral floats accepted
         >>> is_triangular(5)
         False
         >>> is_triangular(667)
         False
+        >>> is_triangular(666.5)
+        ValueError: qtri() requires integral value, got 666.5
     """
     return qtri(x) is not None
 
@@ -385,22 +413,32 @@ def trisum(b: int) -> int:
 
     Args:
         b: Base (number of digits = b, from 0 to b-1)
+           Accepts integral floats like 10.0
 
     Returns:
         The sum of row values in the triangular digit arrangement
 
+    Raises:
+        ValueError: If b < 1 or non-integral float
+        TypeError: If b is not a numeric type
+
     Examples:
         >>> trisum(10)
         666  # 0123 + 456 + 78 + 9 = 666
+        >>> trisum(10.0)
+        666  # Integral floats accepted
         >>> trisum(1)
         0  # Only digit 0
         >>> trisum(2)
         1  # Digits 0,1 arranged as: 1 / 0 = 1 + 0 = 1
+        >>> trisum(10.5)
+        ValueError: trisum() requires integral value, got 10.5
 
     Mathematical context:
         This function connects triangular arrangements to the mystical
         significance of 666 in base-10 representation.
     """
+    b = _ensure_int(b, "trisum")
     if b < 1:
         raise ValueError(f"trisum() requires b >= 1, got {b}")
     if b == 1:

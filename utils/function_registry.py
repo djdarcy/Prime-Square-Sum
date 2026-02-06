@@ -82,7 +82,7 @@ class FunctionRegistry:
         from utils.sieve import nth_prime
 
         # Import from sequences
-        from utils.sequences import primesum, fibonacci, factorial, catalan
+        from utils.sequences import primesum, fibonacci, factorial, catalan, square
 
         # Register each built-in function
         builtins = [
@@ -100,6 +100,8 @@ class FunctionRegistry:
             ("fibonacci", fibonacci),
             ("factorial", factorial),
             ("catalan", catalan),
+            # Basic arithmetic
+            ("square", square),
         ]
 
         for name, func in builtins:

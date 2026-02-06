@@ -748,3 +748,164 @@ class TestVerifyQuantifier:
             verify_expression(expr, evaluator)
 
         assert "free variables" in str(exc.value).lower()
+
+
+# =============================================================================
+# Iterator Factory Tests (Issue #37)
+# =============================================================================
+
+
+class TestIteratorFactories:
+    """Tests for find_matches with iterator_factories parameter."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def evaluator(self):
+        registry = FunctionRegistry()
+        return ExpressionEvaluator(registry)
+
+    def test_custom_iterator_factory(self, parser, evaluator):
+        """Custom iterator factory is used instead of bounds."""
+        from utils.iterators import IntIterator
+
+        expr = parser.parse("does_exist primesum(n,2) == 666")
+
+        # Use iterator that starts at 7 (the answer)
+        results = list(find_matches(
+            expr, evaluator, {},
+            iterator_factories={'n': lambda: IntIterator(7, 10, 1)}
+        ))
+
+        assert len(results) == 1
+        assert results[0] == {'n': 7}
+
+    def test_iterator_factory_with_step(self, parser, evaluator):
+        """Iterator factory with step only returns values at those steps."""
+        from utils.iterators import IntIterator
+
+        # tri(n) for n = 1, 3, 5, 7 are 1, 6, 15, 28
+        expr = parser.parse("for_any tri(n) == 6")
+
+        # Only odd numbers: 1, 3, 5, 7, 9
+        results = list(find_matches(
+            expr, evaluator, {},
+            iterator_factories={'n': lambda: IntIterator(1, 10, 2)}
+        ))
+
+        # tri(3) = 6, and 3 is in our range
+        assert len(results) == 1
+        assert results[0] == {'n': 3}
+
+    def test_iterator_factory_mixed_with_bounds(self, parser, evaluator):
+        """Iterator factory for one var, bounds for another."""
+        from utils.iterators import IntIterator
+
+        expr = parser.parse("for_any tri(n) == m")
+
+        # n uses iterator (1-5), m uses bounds (1-20)
+        results = list(find_matches(
+            expr, evaluator,
+            {'m': 20},
+            iterator_factories={'n': lambda: IntIterator(1, 5, 1)}
+        ))
+
+        # tri(1)=1, tri(2)=3, tri(3)=6, tri(4)=10, tri(5)=15
+        expected_m_values = {1, 3, 6, 10, 15}
+        actual_m_values = {r['m'] for r in results}
+        assert actual_m_values == expected_m_values
+
+    def test_iterator_factory_empty_range(self, parser, evaluator):
+        """Empty iterator produces no results."""
+        from utils.iterators import IntIterator
+
+        expr = parser.parse("for_any tri(n) == 6")
+
+        # Empty range (5 to 1 with step 1)
+        results = list(find_matches(
+            expr, evaluator, {},
+            iterator_factories={'n': lambda: IntIterator(5, 1, 1)}
+        ))
+
+        assert len(results) == 0
+
+    def test_iterator_factory_takes_precedence_over_bounds(self, parser, evaluator):
+        """Iterator factory takes precedence when both specified."""
+        from utils.iterators import IntIterator
+
+        expr = parser.parse("does_exist tri(n) == 6")
+
+        # bounds says n goes up to 100, but iterator says only 3-5
+        results = list(find_matches(
+            expr, evaluator,
+            {'n': 100},
+            iterator_factories={'n': lambda: IntIterator(3, 5, 1)}
+        ))
+
+        # tri(3) = 6, which is in our iterator range
+        assert len(results) == 1
+        assert results[0] == {'n': 3}
+
+    def test_shared_variable_works(self, parser, evaluator):
+        """Same variable on LHS and RHS gets same value."""
+        from utils.iterators import IntIterator
+
+        # n appears in both function arguments
+        expr = parser.parse("for_any tri(n) == primesum(n,1)")
+
+        # tri(n) = n*(n+1)/2, primesum(n,1) = sum of first n primes
+        # tri(1) = 1, primesum(1,1) = 2 - not equal
+        # tri(2) = 3, primesum(2,1) = 5 - not equal
+        # Let's search a small range
+        results = list(find_matches(
+            expr, evaluator, {},
+            iterator_factories={'n': lambda: IntIterator(1, 10, 1)}
+        ))
+
+        # Verify each result has n used consistently
+        for r in results:
+            from utils.number_theory import tri
+            from utils.sequences import primesum
+            n = r['n']
+            assert tri(n) == primesum(n, 1)
+
+    def test_two_variable_with_factories(self, parser, evaluator):
+        """Two variables both with iterator factories."""
+        from utils.iterators import IntIterator
+
+        expr = parser.parse("for_any tri(n) == tri(m)")
+
+        results = list(find_matches(
+            expr, evaluator, {},
+            iterator_factories={
+                'n': lambda: IntIterator(1, 5, 1),
+                'm': lambda: IntIterator(1, 5, 1)
+            }
+        ))
+
+        # tri(n) == tri(m) when n == m (5 matches expected)
+        assert len(results) == 5
+        for r in results:
+            assert r['n'] == r['m']
+
+    def test_float_iterator_with_grammar(self, parser, evaluator):
+        """FloatIterator works with find_matches."""
+        from utils.iterators import FloatIterator
+
+        # Use the built-in square function with a float iterator
+        # This tests that float iteration works correctly with the grammar
+        # square(0.5) == 0.25, and 0.5 should be in the iteration range
+
+        expr = parser.parse("does_exist square(x) == 0.25")
+
+        results = list(find_matches(
+            expr, evaluator, {},
+            iterator_factories={
+                'x': lambda: FloatIterator(0.0, 1.0, step=0.1)
+            }
+        ))
+
+        assert len(results) == 1
+        assert abs(results[0]['x'] - 0.5) < 1e-9

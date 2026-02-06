@@ -1,0 +1,110 @@
+# Why This Tool Exists: Computational Irreducibility
+
+Prime-Square-Sum isn't just a brute-force iterator. It exists because certain mathematical relationships **cannot be solved analytically** - they can only be discovered through computation.
+
+## The Core Question
+
+This project investigates whether `stf(666)` - a 98-digit number derived from triangular row sums - equals a sum of primes raised to some power:
+
+```
+stf(666) = 37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290
+
+Does there exist n and p such that: primesum(n, p) = stf(666)?
+```
+
+The only way to find out is to **compute and check**.
+
+## Closed-Form vs Irreducible Functions
+
+Not all mathematical functions are created equal:
+
+### Functions with Closed-Form Inverses
+
+Some functions can be inverted algebraically:
+
+| Function | Forward | Inverse |
+|----------|---------|---------|
+| `tri(n) = (n² + n) / 2` | `tri(36) = 666` | `qtri(666) = (-1 + √5329) / 2 = 36` |
+| `square(n) = n²` | `square(5) = 25` | `√25 = 5` |
+| Polynomial roots | `(n+3)² = 49` | Quadratic formula: `n = 4` |
+
+For these, the expression system is **convenient** but not **necessary** - you could solve them on paper.
+
+### Computationally Irreducible Functions
+
+Prime-based functions have no closed-form inverse:
+
+```
+primesum(n, 2) = p₁² + p₂² + p₃² + ... + pₙ²
+primesum(7, 2) = 4 + 9 + 25 + 49 + 121 + 169 + 289 = 666
+```
+
+**Why is this irreducible?**
+
+1. **No formula for the nth prime**: There's no closed-form expression `p(n)` that directly computes the nth prime
+2. **No inverse for prime sums**: Given a target like 666, you can't algebraically solve for n
+3. **Enumeration is required**: The only way to find `primesum⁻¹(666, 2) = 7` is to compute forward
+
+This is the mathematical concept of [computational irreducibility](https://en.wikipedia.org/wiki/Computational_irreducibility) - no shortcut exists; you must run the computation.
+
+## What This Tool Provides
+
+Prime-Square-Sum makes exploring irreducible relationships practical:
+
+1. **Efficient enumeration**: Optimized sieving (primesieve) generates primes at ~125M/sec
+2. **Incremental caching**: Track cumulative sums without recomputing from scratch
+3. **Expression grammar**: Query arbitrary relationships: `primesum(n,2) == tri(m)`
+4. **Pattern discovery**: Find relationships that can't be derived analytically
+
+### Example: The Original Discovery
+
+The relationship `stf(10) = 666 = primesum(7, 2)` wasn't solved algebraically - it was discovered by computation, then verified symbolically.
+
+## What Patterns CAN Help (But Don't Fully Solve It)
+
+### Prime Distribution Patterns
+
+Primes > 3 are of the form `6k ± 1`. This helps **sieving** (skip 66% of candidates) but doesn't provide the nth prime directly.
+
+### Pascal's Triangle Connection
+
+Powers of 11 embed Pascal coefficients:
+```
+11¹ = 11      → {1, 1}
+11² = 121     → {1, 2, 1}
+11³ = 1331    → {1, 3, 3, 1}
+11⁴ = 14641   → {1, 4, 6, 4, 1}
+```
+
+This elegant pattern applies to polynomial expansions but doesn't help with prime sums - there's no polynomial structure to exploit.
+
+### Composite Base Sieving
+
+Techniques like examining digit patterns in composite bases can help identify composites, but don't provide prime formulas.
+
+## The Value of Exploration
+
+This tool enables **empirical mathematics**:
+
+- Test conjectures computationally before attempting proofs
+- Discover unexpected relationships (like stf(10) = 666 = tri(36))
+- Explore chains of triangular numbers and prime sums
+- Verify patterns across massive search spaces
+
+The goal isn't just to find answers - it's to find **patterns worth proving**.
+
+## Verification
+
+Run the verification script to confirm the core relationships:
+
+```bash
+python verification/verify_stf666.py
+```
+
+This verifies that `stf(666)` equals the 98-digit target value that the project investigates.
+
+## See Also
+
+- [README.md](../README.md) - Project overview and the stf(10) = 666 discovery
+- [expressions.md](expressions.md) - Expression syntax for querying relationships
+- [paper and notes/](../paper%20and%20notes/) - Original Mathematica notebook with theoretical background

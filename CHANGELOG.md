@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.7] - 2026-02-05
+
+### Added
+- **Iterator system with type coercion foundation** (Issues #37, #20)
+  - `utils/types.py` - Centralized type validation utilities
+    - `_ensure_int()` - Accept integral floats (7.0), reject non-integral (7.5)
+    - `_ensure_int32/64()`, `_ensure_uint64()` - Bounded integer validation
+    - `_ensure_float32/64()` - Float bounds validation for GPU compatibility
+  - `utils/iterators.py` - Iterator protocol for sequence enumeration
+    - `SequenceIterator` ABC with `__iter__`, `__next__`, `current`, `exhausted`
+    - `IntIterator` - Integer iteration with dtype bounds validation
+    - `FloatIterator` - Float iteration using Decimal for precision
+    - `num_steps` linspace-style mode for FloatIterator
+- **CLI iterator flags**
+  - `--iter-var VAR:START:STOP[:STEP][:DTYPE]` - Compact iterator syntax
+  - `--iter-type`, `--iter-start`, `--iter-stop`, `--iter-step` - Individual flags
+  - `--iter-num-steps` - Linspace mode (compute step from count)
+  - `--iter-dtype` - Type constraint (int32, int64, uint64, float32, float64)
+- **Documentation**
+  - `docs/rationale.md` - Why this tool exists (computational irreducibility)
+  - `paper and notes/conjectures.md` - Triangular depth observations
+  - `verification/verify_stf666.py` - Verifies stf(666) = 98-digit number
+- 103 new tests (75 iterator + 28 type coercion) - 515 total tests passing
+
+### Changed
+- `find_matches()` now accepts `iterator_factories` parameter (backwards compatible)
+- Type validation applied consistently to: `tri()`, `qtri()`, `trisum()`, `primesum()`, `fibonacci()`, `factorial()`, `catalan()`
+- README.md updated with rationale link and improved clarity
+
+### Technical Notes
+- FloatIterator uses `decimal.Decimal` internally to avoid floating-point precision issues
+- dtype validation ensures compatibility with primesieve (uint64) and cupy (int32/int64)
+- Iterator factories allow lazy construction for memory efficiency
+
+### Related Issues
+- Issue #37: Basic iterator protocol (closes)
+- Issue #20: Handle numeric type coercion (closes)
+- Issue #24: Custom Iterator Functions epic (partial - #37 complete)
+- Issue #43: Triangular depth conjectures (documentation added)
+
+### Design Documents
+- `2026-02-05__15-11-13__v077-implementation-plan.md`
+- `2026-02-05__17-34-25__v077-v08x-implementation-roadmap.md`
+
 ## [0.7.6] - 2026-02-05
 
 ### Added

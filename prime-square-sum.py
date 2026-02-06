@@ -49,6 +49,7 @@ from utils.function_registry import FunctionRegistry
 from utils.cli import (
     build_expression_from_args,
     build_bounds_from_args,
+    build_iterator_factories_from_args,
     format_match,
     format_no_match,
     # Issue #21: Equation loading
@@ -177,6 +178,50 @@ Comparison operators: ==, !=, <, >, <=, >=
         default=10000,
         metavar='M',
         help='Maximum value for variable m (default: 10000)'
+    )
+
+    # === Iterator Configuration (Issue #37) ===
+    parser.add_argument(
+        '--iter-var',
+        action='append',
+        metavar='VAR:START:STOP[:STEP][:DTYPE]',
+        help='Define iterator for variable (e.g., n:1:1000:2:uint64)'
+    )
+    parser.add_argument(
+        '--iter-type',
+        action='append',
+        metavar='VAR:TYPE',
+        help='Set iterator type for variable (int or float)'
+    )
+    parser.add_argument(
+        '--iter-start',
+        action='append',
+        metavar='VAR:VALUE',
+        help='Set iterator start value for variable'
+    )
+    parser.add_argument(
+        '--iter-stop',
+        action='append',
+        metavar='VAR:VALUE',
+        help='Set iterator stop value for variable'
+    )
+    parser.add_argument(
+        '--iter-step',
+        action='append',
+        metavar='VAR:VALUE',
+        help='Set iterator step for variable'
+    )
+    parser.add_argument(
+        '--iter-num-steps',
+        action='append',
+        metavar='VAR:COUNT',
+        help='Set number of steps for float iterator (linspace-style)'
+    )
+    parser.add_argument(
+        '--iter-dtype',
+        action='append',
+        metavar='VAR:DTYPE',
+        help='Set dtype validation (int/int32/int64/uint64/float32/float64)'
     )
 
     # === Output Control ===
@@ -333,6 +378,9 @@ def handle_expression(args, registry: FunctionRegistry) -> int:
     # Build bounds
     bounds = build_bounds_from_args(args, expr_str)
 
+    # Build iterator factories (Issue #37)
+    iterator_factories = build_iterator_factories_from_args(args, bounds)
+
     # Check which variables need bounds
     free_vars = find_free_variables(ast)
     if args.verbose and free_vars:
@@ -345,7 +393,7 @@ def handle_expression(args, registry: FunctionRegistry) -> int:
     match_count = 0
 
     try:
-        for match in find_matches(ast, evaluator, bounds):
+        for match in find_matches(ast, evaluator, bounds, iterator_factories):
             found_any = True
             match_count += 1
             print(format_match(match, args.format))

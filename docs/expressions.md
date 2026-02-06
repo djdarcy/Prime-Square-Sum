@@ -98,13 +98,62 @@ python prime-square-sum.py --list-functions
 Free variables (like `n`, `m`) are iterated over search ranges:
 
 ```bash
-# Set bounds for variables
+# Set bounds for variables (legacy syntax)
 --expr "for_any primesum(n,2) == tri(m)" --max-n 1000 --max-m 5000
 ```
 
 Default bounds:
 - `--max-n`: 1,000,000
 - `--max-m`: 10,000
+
+### Iterator Syntax (v0.7.7+)
+
+For more control over iteration, use `--iter-var`:
+
+```bash
+# Compact syntax: VAR:START:STOP[:STEP][:DTYPE]
+--iter-var n:1:1000              # n from 1 to 1000, step 1
+--iter-var n:1:100:2             # n = 1, 3, 5, ..., 99 (odd numbers)
+--iter-var n:1:1000000:1:uint64  # Ensure primesieve compatibility
+
+# Multiple variables
+--expr "for_any primesum(n,2) == tri(m)" --iter-var n:1:100 --iter-var m:1:50
+```
+
+#### Iterator Flags
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--iter-var` | Compact iterator definition | `n:1:1000:2` |
+| `--iter-type` | Variable type (int/float) | `--iter-type n:float` |
+| `--iter-start` | Start value | `--iter-start n:1` |
+| `--iter-stop` | Stop value (inclusive) | `--iter-stop n:1000` |
+| `--iter-step` | Step size | `--iter-step n:2` |
+| `--iter-num-steps` | Number of steps (linspace) | `--iter-num-steps x:11` |
+| `--iter-dtype` | Data type constraint | `--iter-dtype n:uint64` |
+
+#### Data Types
+
+| dtype | Range | Use Case |
+|-------|-------|----------|
+| `int` | Arbitrary precision | Default, general use |
+| `int32` | -2³¹ to 2³¹-1 | cupy GPU arrays |
+| `int64` | -2⁶³ to 2⁶³-1 | cupy GPU arrays |
+| `uint64` | 0 to 2⁶⁴-1 | primesieve compatibility |
+| `float32` | ±3.4e38 | GPU floats |
+| `float64` | ±1.8e308 | Standard floats |
+
+#### Float Iteration
+
+Float iteration uses Decimal precision to avoid accumulation errors:
+
+```bash
+# Float iteration with step
+--iter-var x:0.0:1.0:0.1 --iter-type x:float
+
+# Linspace-style (11 points from 0 to 1)
+--iter-var x:0.0:1.0 --iter-type x:float --iter-num-steps x:11
+```
 
 ## Decomposed Flags
 

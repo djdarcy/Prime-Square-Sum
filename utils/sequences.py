@@ -24,47 +24,7 @@ from typing import Optional, Any, Union
 import numpy as np
 
 from utils.sieve import generate_n_primes, nth_prime as sieve_nth_prime
-
-
-def _ensure_int(value: Any, func_name: str) -> int:
-    """
-    Convert value to int if integral, otherwise raise appropriate error.
-
-    Args:
-        value: Value to convert (int, float, numpy integer)
-        func_name: Function name for error messages
-
-    Returns:
-        Integer value
-
-    Raises:
-        ValueError: If float is not integral (e.g., 7.5)
-        TypeError: If value is not a numeric type
-
-    Examples:
-        >>> _ensure_int(7, "test")
-        7
-        >>> _ensure_int(7.0, "test")
-        7
-        >>> _ensure_int(7.5, "test")
-        ValueError: test() requires integral value, got 7.5
-    """
-    # Handle numpy integers
-    if isinstance(value, np.integer):
-        return int(value)
-
-    # Handle floats - allow integral floats like 7.0
-    if isinstance(value, float):
-        if value != int(value):
-            raise ValueError(f"{func_name}() requires integral value, got {value}")
-        return int(value)
-
-    # Handle regular ints
-    if isinstance(value, int):
-        return value
-
-    # Reject other types
-    raise TypeError(f"{func_name}() requires int, got {type(value).__name__}")
+from utils.types import _ensure_int
 
 
 def primesum(n: Union[int, float], power: Union[int, float] = 2, *, _cache=None) -> int:
@@ -240,6 +200,30 @@ def catalan(n: Union[int, float]) -> int:
 
     # C(n) = (2n)! / ((n+1)! × n!)
     return math_factorial(2 * n) // (math_factorial(n + 1) * math_factorial(n))
+
+
+def square(x: Union[int, float]) -> Union[int, float]:
+    """
+    Calculate x squared.
+
+    A basic arithmetic function that returns x * x.
+    Accepts both integers and floats.
+
+    Args:
+        x: Number to square
+
+    Returns:
+        x squared (x * x)
+
+    Examples:
+        >>> square(5)
+        25
+        >>> square(0.5)
+        0.25
+        >>> square(-3)
+        9
+    """
+    return x * x
 
 
 # Quick verification when run directly

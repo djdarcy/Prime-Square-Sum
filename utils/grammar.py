@@ -23,13 +23,14 @@ from __future__ import annotations
 import itertools
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional, Set, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Union
 
 from lark import Lark, Transformer
 from lark.visitors import v_args
 from lark.exceptions import UnexpectedInput, UnexpectedCharacters, UnexpectedToken
 
 from utils.function_registry import FunctionRegistry
+from utils.iterators import IntIterator, SequenceIterator
 
 
 # =============================================================================
@@ -361,7 +362,8 @@ class ExpressionEvaluator:
 def find_matches(
     expr: Expression,
     evaluator: ExpressionEvaluator,
-    bounds: Dict[str, int]
+    bounds: Dict[str, int],
+    iterator_factories: Optional[Dict[str, Callable[[], SequenceIterator]]] = None
 ) -> Iterator[Dict[str, Any]]:
     """
     Find all variable assignments that satisfy the expression.
@@ -374,13 +376,17 @@ def find_matches(
         expr: Parsed expression with quantifier
         evaluator: Expression evaluator with function registry
         bounds: Max values for each free variable {var_name: max_value}
+            Used when iterator_factories doesn't specify a factory for a variable.
+        iterator_factories: Optional dict mapping variable names to factory
+            functions that return SequenceIterator instances. Takes precedence
+            over bounds for the same variable.
 
     Yields:
         Dict mapping variable names to values that satisfy comparison,
         or {"__verify_result__": bool} for verify mode
 
     Raises:
-        ValueError: If a free variable has no bound specified
+        ValueError: If a free variable has no bound or iterator specified
         ValueError: If verify mode is used with free variables
         ValueError: If no quantifier and expression has free variables
 
@@ -389,10 +395,21 @@ def find_matches(
         registry = FunctionRegistry()
         evaluator = ExpressionEvaluator(registry)
 
+        # Using bounds (backwards compatible)
         expr = parser.parse("does_exist primesum(n,2) == 666")
         for match in find_matches(expr, evaluator, {'n': 100}):
             print(match)  # {'n': 7}
 
+        # Using iterator_factories
+        from utils.iterators import IntIterator
+        expr = parser.parse("for_any primesum(n,2) == tri(m)")
+        for match in find_matches(expr, evaluator, {}, {
+            'n': lambda: IntIterator(1, 100, 2),  # odd numbers only
+            'm': lambda: IntIterator(1, 50)
+        }):
+            print(match)
+
+        # Verify mode
         expr = parser.parse("verify primesum(7,2) == 666")
         for match in find_matches(expr, evaluator, {}):
             print(match)  # {'__verify_result__': True}
@@ -422,8 +439,13 @@ def find_matches(
         yield {"__verify_result__": bool(result)}
         return
 
-    # Validate all free variables have bounds (for does_exist / for_any)
-    missing = free_vars - set(bounds.keys())
+    # Initialize iterator_factories if not provided
+    if iterator_factories is None:
+        iterator_factories = {}
+
+    # Validate all free variables have bounds or iterator factories (for does_exist / for_any)
+    covered_vars = set(bounds.keys()) | set(iterator_factories.keys())
+    missing = free_vars - covered_vars
     if missing:
         missing_list = sorted(missing)
         suggestions = ', '.join(f'--max-{v}' for v in missing_list)
@@ -438,9 +460,24 @@ def find_matches(
             yield {}
         return
 
-    # Generate all combinations within bounds
+    # Build iterators for each variable
+    # iterator_factories takes precedence over bounds
     var_list = sorted(free_vars)
-    ranges = [range(1, bounds[v] + 1) for v in var_list]
+    iterators = []
+    for v in var_list:
+        if v in iterator_factories:
+            iterators.append(iterator_factories[v]())
+        else:
+            # Default: IntIterator from 1 to bounds[v]
+            iterators.append(IntIterator(1, bounds[v], 1))
+
+    # Generate all combinations (Cartesian product)
+    # Note: itertools.product needs iterables, so we convert iterators to lists
+    # Future Phase 5 will add parallel/clamp/wrap strategies that don't materialize lists
+    ranges = [list(it) for it in iterators]
+
+    # Track if we've validated functions (do this on first iteration)
+    functions_validated = False
 
     for values in itertools.product(*ranges):
         context = dict(zip(var_list, values))
@@ -449,9 +486,16 @@ def find_matches(
                 yield context.copy()
                 if quantifier == "does_exist":
                     return  # Stop at first match
-        except EvaluationError:
+            functions_validated = True  # If we got here, functions are valid
+        except EvaluationError as e:
+            # Check if this is a fatal error (unknown function, etc.)
+            # vs a skippable error (invalid args during iteration)
+            error_msg = str(e).lower()
+            if "unknown function" in error_msg or not functions_validated:
+                # First iteration error or unknown function: re-raise
+                raise
             # Skip combinations that cause evaluation errors
-            # (e.g., primesum(-1, 2) when iteration somehow produces invalid args)
+            # (e.g., primesum(-1, 2) when iteration produces invalid args)
             continue
 
 

@@ -6,19 +6,19 @@
 
 📓 **[View the Mathematica Notebook](https://github.com/djdarcy/Prime-Square-Sum/blob/main/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)** *(Requires [Mathematica](https://www.wolfram.com/mathematica/) or [Wolfram Player](https://www.wolfram.com/player/))*
 
-The python program squares primes and sums them together to determine if:
+The python program is a computational platform for validating mathematical relationships. It checks LHS expressions against RHS targets and stores sequences for future analysis. The main focus of `prime-square-sum` is on summing triangular row values together to determine if:
 
 ![stf(b) = sum_(z=1)^qg(b) tf(b,z);](<paper and notes/function-stf-defined.png> "stf defined")
 
-is equal to a series of squared primes.
+is equal to the series of squared/cubed primes.
 
 ```
-b = triangular number (also the number base);              //equal to: (r^2+r)/2
+b = triangular number (also the number base);              //equal to: tri(r)=(r^2+r)/2
 r = qg(b) = size of the base row of the triangular number; //qg(b) = 1/2(-1+sqrt(1+8b)
 z = row in the triangular number;  //ex. tf(10,4)=0123; tf(10,3)=456; tf(10,2)=78, etc.)
 ```
 
-Where tf() is defined to be:
+Where `tf()` is defined to be:
 
 ![tf(b,z) = (-2 + 2b - 2b^2 + z - bz - z^2 + bz^2 + b^z(2 + 2b^2 + z + z^2 - b(2 + z + z^2))) / (2(-1 + b)^2)](<paper and notes/function-tf-defined.png> "tf defined")
 
@@ -30,11 +30,13 @@ stf(10) = 2² + 3² + 5² + 7² + 11² + 13² + 17² = 666
 
 What I find fascinating about this relationship is the resultant value 666 is a triangular number itself. So the question then is if we were able to sum the rows of a 666 element triangle with 36 rows in base-666 would the result _also_ be the sum of squared or cubed primes?
 
-This program attempts to provide an answer. The base-10 number from `stf(666)` is massively large unfortunately at 98 digits:
+This program attempts to provide an answer. The base-10 number from `stf(666)` unfortunately is massively large though at 98 digits:
 
 `37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290`
 
-So I've adapted it to work with multiprocessing and CUDA (via CuPy) to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/main/paper%20and%20notes) for more details.
+While `stf(b)` is a closed-form function, `primesum(n,p)` is computationally irreducible. This means there is no readily available formula to directly find which `n` satisfies `primesum(n,p) = stf(b)`. So, in the absence of a better method, we enumerate prime sums and check for matches. See [docs/rationale.md](docs/rationale.md) for additional details as to why this tool needs to be as versatile as it is.
+
+Due to the huge size of the 98-digits I've further adapted `prime-square-sum` to work with multiprocessing and CUDA (via CuPy) to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/main/paper%20and%20notes) for more details.
 
 ## Usage
 
@@ -66,13 +68,13 @@ Verify known results without iteration using the `verify` quantifier:
 python prime-square-sum.py --expr "verify primesum(7,2) == 666"  # Returns: true
 
 # Implicit verify - auto-detected when no free variables
-python prime-square-sum.py --expr "primesum(7,2) == 666"  # Returns: true
+python prime-square-sum.py --expr "primesum(7,2) == trisum(10)"  # Returns: true
 
 # Using saved equation
 python prime-square-sum.py --equation verify-stf10
 
 # JSON output for programmatic use
-python prime-square-sum.py --expr "verify primesum(7,2) == 666" --format json
+python prime-square-sum.py --expr "verify primesum(7,2) == trisum(10)" --format json
 # Returns: {"verified": true}
 ```
 
@@ -90,10 +92,10 @@ python prime-square-sum.py --list-algorithms
 python prime-square-sum.py --target 666 --algorithm sieve:segmented
 
 # Use minimal memory mode
-python prime-square-sum.py --target 666 --prefer minimal
+python prime-square-sum.py --target trisum(10) --prefer minimal
 
 # Set memory limit
-python prime-square-sum.py --target 666 --max-memory 512
+python prime-square-sum.py --target trisum(10) --max-memory 512
 ```
 
 Available algorithms: `auto`, `primesieve`, `basic`, `segmented`, `individual`
@@ -138,6 +140,7 @@ For venv, pip, Docker, GPU setup, and detailed troubleshooting, see [docs/instal
 
 | Document | Description |
 |----------|-------------|
+| [docs/rationale.md](docs/rationale.md) | Why this tool exists: computational irreducibility |
 | [docs/expressions.md](docs/expressions.md) | Expression syntax, quantifiers, operators |
 | [docs/equations.md](docs/equations.md) | Saved equations and `equations.json` format |
 | [docs/functions.md](docs/functions.md) | Function reference and custom functions |

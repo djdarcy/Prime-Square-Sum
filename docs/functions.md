@@ -176,10 +176,38 @@ Functions can be nested:
 
 ## Type Handling
 
-Functions accept integral values:
-- Integers: `666`
-- Integral floats: `666.0` (converted to `666`)
-- Non-integral floats: `666.5` (raises error)
+All sequence functions use consistent type coercion (v0.7.7+):
+
+### Accepted Types
+
+| Input | Result | Example |
+|-------|--------|---------|
+| Integer | Passed through | `primesum(7, 2)` |
+| Integral float | Converted to int | `primesum(7.0, 2)` → `primesum(7, 2)` |
+| numpy integer | Converted to int | Works with numpy arrays |
+| Non-integral float | **Error** | `primesum(7.5, 2)` raises `ValueError` |
+
+### Error Messages
+
+```python
+# Non-integral float
+>>> primesum(7.5, 2)
+ValueError: primesum() requires integral value, got 7.5
+
+# Wrong type
+>>> primesum("7", 2)
+TypeError: primesum() requires int, got str
+```
+
+### Bounded Types for External Libraries
+
+When using iterators with dtype constraints, values are validated:
+
+| dtype | Range | Library |
+|-------|-------|---------|
+| `uint64` | 0 to 2⁶⁴-1 | primesieve |
+| `int32` | -2³¹ to 2³¹-1 | cupy |
+| `int64` | -2⁶³ to 2⁶³-1 | cupy |
 
 ## See Also
 

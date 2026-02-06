@@ -294,6 +294,7 @@ class TestFunctionRegistryIntegration:
         registry = FunctionRegistry()
 
         # 6 original (tri, qtri, trisum, is_triangular, digital_root, nth_prime)
-        # + 4 new (primesum, fibonacci, factorial, catalan)
-        # = 10 total
-        assert len(registry) == 10
+        # + 4 sequences (primesum, fibonacci, factorial, catalan)
+        # + 1 arithmetic (square)
+        # = 11 total
+        assert len(registry) == 11

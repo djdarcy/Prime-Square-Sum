@@ -312,20 +312,14 @@ class TestErrorHandling:
         assert "error" in stderr.lower() or "error" in stdout.lower()
 
     def test_unknown_function(self):
-        """Unknown function results in no match (silently fails during iteration).
-
-        Note: Currently, unknown functions are caught during iteration and
-        silently skipped. A future enhancement could validate functions
-        before iteration starts.
-        """
+        """Unknown function results in clear error message."""
         code, stdout, stderr = run_cli(
             "--expr", "does_exist unknown_func(n) == 666",
             "--max-n", "10"
         )
-        # Currently returns "no match" rather than an error
-        # This is because EvaluationError is caught during iteration
         assert code == 1
-        assert "No match" in stdout or "not found" in stdout.lower()
+        # Should report unknown function error, not silently fail
+        assert "unknown function" in stderr.lower() or "unknown function" in stdout.lower()
 
     def test_missing_rhs_with_lhs(self):
         """--lhs without --rhs shows error."""

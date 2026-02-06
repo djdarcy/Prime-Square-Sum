@@ -28,6 +28,10 @@ from utils.cli import (
     Config,
     load_config,
     resolve_default_equation,
+    # Issue #37: Iterator definitions
+    IteratorDef,
+    parse_iterator_def,
+    build_iterator_factories_from_args,
 )
 
 
@@ -505,3 +509,219 @@ class TestAlgorithmConfig:
         assert config.algorithms == {}
         assert config.max_memory_mb is None
         assert config.prefer is None
+
+
+# =============================================================================
+# Iterator Definition Tests (Issue #37)
+# =============================================================================
+
+
+class TestIteratorDef:
+    """Tests for IteratorDef dataclass."""
+
+    def test_defaults(self):
+        """Check default values."""
+        iter_def = IteratorDef()
+        assert iter_def.type == "int"
+        assert iter_def.dtype == "int"
+        assert iter_def.start == 1
+        assert iter_def.stop is None
+        assert iter_def.step is None
+
+    def test_max_alias(self):
+        """Legacy 'max' field aliases to 'stop'."""
+        iter_def = IteratorDef(max=100)
+        assert iter_def.stop == 100
+
+    def test_to_iterator_int(self):
+        """to_iterator creates IntIterator."""
+        iter_def = IteratorDef(type="int", start=1, stop=10, step=2)
+        it = iter_def.to_iterator()
+        result = list(it)
+        assert result == [1, 3, 5, 7, 9]
+
+    def test_to_iterator_int_with_dtype(self):
+        """to_iterator respects dtype."""
+        iter_def = IteratorDef(type="int", start=0, stop=5, dtype="uint64")
+        it = iter_def.to_iterator()
+        assert it.dtype == "uint64"
+        result = list(it)
+        assert result == [0, 1, 2, 3, 4, 5]
+
+    def test_to_iterator_float(self):
+        """to_iterator creates FloatIterator."""
+        iter_def = IteratorDef(type="float", start=0.0, stop=0.5, step=0.1)
+        it = iter_def.to_iterator()
+        result = list(it)
+        assert len(result) == 6
+        assert result[0] == pytest.approx(0.0)
+        assert result[-1] == pytest.approx(0.5)
+
+    def test_to_iterator_float_num_steps(self):
+        """to_iterator with num_steps creates linspace-style iterator."""
+        iter_def = IteratorDef(type="float", start=0.0, stop=1.0, num_steps=11)
+        it = iter_def.to_iterator()
+        result = list(it)
+        assert len(result) == 11
+        assert result[5] == pytest.approx(0.5)
+
+
+class TestParseIteratorDef:
+    """Tests for parse_iterator_def function."""
+
+    def test_basic_int(self):
+        """Parse basic integer iterator."""
+        var_name, iter_def = parse_iterator_def("n:1:1000")
+        assert var_name == "n"
+        assert iter_def.type == "int"
+        assert iter_def.start == 1
+        assert iter_def.stop == 1000
+        assert iter_def.step is None
+
+    def test_int_with_step(self):
+        """Parse integer iterator with step."""
+        var_name, iter_def = parse_iterator_def("n:1:100:2")
+        assert var_name == "n"
+        assert iter_def.start == 1
+        assert iter_def.stop == 100
+        assert iter_def.step == 2
+
+    def test_int_with_dtype(self):
+        """Parse integer iterator with dtype."""
+        var_name, iter_def = parse_iterator_def("n:0:1000:1:uint64")
+        assert var_name == "n"
+        assert iter_def.dtype == "uint64"
+
+    def test_float_auto_detect(self):
+        """Auto-detect float from decimal values."""
+        var_name, iter_def = parse_iterator_def("x:0.0:1.0")
+        assert var_name == "x"
+        assert iter_def.type == "float"
+        assert iter_def.start == 0.0
+        assert iter_def.stop == 1.0
+
+    def test_float_with_step(self):
+        """Parse float iterator with step."""
+        var_name, iter_def = parse_iterator_def("x:0.0:1.0:0.1")
+        assert var_name == "x"
+        assert iter_def.step == 0.1
+
+    def test_float_with_dtype(self):
+        """Parse float iterator with dtype."""
+        var_name, iter_def = parse_iterator_def("x:0.0:1.0::float32")
+        assert var_name == "x"
+        assert iter_def.dtype == "float32"
+
+    def test_negative_values(self):
+        """Parse with negative values."""
+        var_name, iter_def = parse_iterator_def("n:-10:10:1")
+        assert iter_def.start == -10
+        assert iter_def.stop == 10
+
+    def test_invalid_too_few_parts(self):
+        """Raise on too few parts."""
+        with pytest.raises(ValueError, match="Expected VAR:START:STOP"):
+            parse_iterator_def("n:1")
+
+    def test_invalid_empty_var(self):
+        """Raise on empty variable name."""
+        with pytest.raises(ValueError, match="Empty variable name"):
+            parse_iterator_def(":1:100")
+
+    def test_invalid_start(self):
+        """Raise on invalid start value."""
+        with pytest.raises(ValueError, match="Invalid start/stop"):
+            parse_iterator_def("n:abc:100")
+
+    def test_invalid_int_dtype(self):
+        """Raise on invalid int dtype."""
+        with pytest.raises(ValueError, match="Invalid dtype"):
+            parse_iterator_def("n:1:100:1:float64")
+
+    def test_invalid_float_dtype(self):
+        """Raise on invalid float dtype."""
+        with pytest.raises(ValueError, match="Invalid dtype"):
+            parse_iterator_def("x:0.0:1.0:0.1:int32")
+
+
+class TestBuildIteratorFactories:
+    """Tests for build_iterator_factories_from_args function."""
+
+    def test_from_bounds_only(self):
+        """Create factories from bounds when no --var specified."""
+        args = Namespace(iter_var=None, iter_type=None, iter_start=None,
+                        iter_stop=None, iter_step=None, iter_num_steps=None,
+                        iter_dtype=None)
+        bounds = {'n': 100, 'm': 50}
+        factories = build_iterator_factories_from_args(args, bounds)
+
+        assert 'n' in factories
+        assert 'm' in factories
+
+        # Verify factory produces correct iterator
+        it_n = factories['n']()
+        assert list(it_n) == list(range(1, 101))
+
+    def test_from_iter_var(self):
+        """Create factories from --var syntax."""
+        args = Namespace(iter_var=["n:1:10:2"], iter_type=None, iter_start=None,
+                        iter_stop=None, iter_step=None, iter_num_steps=None,
+                        iter_dtype=None)
+        bounds = {}
+        factories = build_iterator_factories_from_args(args, bounds)
+
+        assert 'n' in factories
+        it_n = factories['n']()
+        assert list(it_n) == [1, 3, 5, 7, 9]
+
+    def test_iter_var_overrides_bounds(self):
+        """--var takes precedence over bounds."""
+        args = Namespace(iter_var=["n:5:10:1"], iter_type=None, iter_start=None,
+                        iter_stop=None, iter_step=None, iter_num_steps=None,
+                        iter_dtype=None)
+        bounds = {'n': 1000}  # Should be ignored
+        factories = build_iterator_factories_from_args(args, bounds)
+
+        it_n = factories['n']()
+        assert list(it_n) == [5, 6, 7, 8, 9, 10]
+
+    def test_multiple_iter_var(self):
+        """Multiple --var specifications."""
+        args = Namespace(iter_var=["n:1:5", "m:10:15"], iter_type=None,
+                        iter_start=None, iter_stop=None, iter_step=None,
+                        iter_num_steps=None, iter_dtype=None)
+        bounds = {}
+        factories = build_iterator_factories_from_args(args, bounds)
+
+        assert 'n' in factories
+        assert 'm' in factories
+
+        it_n = factories['n']()
+        it_m = factories['m']()
+        assert list(it_n) == [1, 2, 3, 4, 5]
+        assert list(it_m) == [10, 11, 12, 13, 14, 15]
+
+    def test_iter_dtype_override(self):
+        """--iter-dtype overrides default dtype."""
+        args = Namespace(iter_var=["n:0:100"], iter_type=None, iter_start=None,
+                        iter_stop=None, iter_step=None, iter_num_steps=None,
+                        iter_dtype=["n:uint64"])
+        bounds = {}
+        factories = build_iterator_factories_from_args(args, bounds)
+
+        it_n = factories['n']()
+        assert it_n.dtype == "uint64"
+
+    def test_float_iterator_factory(self):
+        """Float iterator from --var."""
+        args = Namespace(iter_var=["x:0.0:1.0:0.25"], iter_type=None,
+                        iter_start=None, iter_stop=None, iter_step=None,
+                        iter_num_steps=None, iter_dtype=None)
+        bounds = {}
+        factories = build_iterator_factories_from_args(args, bounds)
+
+        it_x = factories['x']()
+        result = list(it_x)
+        assert len(result) == 5
+        assert result[0] == pytest.approx(0.0)
+        assert result[-1] == pytest.approx(1.0)

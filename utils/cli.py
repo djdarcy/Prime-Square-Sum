@@ -184,11 +184,68 @@ class ParameterDef:
 
 @dataclass
 class IteratorDef:
-    """Definition of an iterator variable (placeholder for Issue #24)."""
-    start: Union[int, float] = 1
-    max: Optional[Union[int, float]] = None
-    step_func: Optional[str] = None  # Future: "linear_step(1)", etc.
+    """
+    Definition of an iterator variable.
+
+    Used to configure how a variable iterates during expression evaluation.
+    Supports integer and float types with various iteration modes.
+
+    Issue: #24 (Custom Iterator Functions), #37 (Basic Iterator Protocol)
+    """
     type: str = "int"  # "int" or "float"
+    dtype: str = "int"  # Validation type: "int", "int32", "int64", "uint64", "float32", "float64"
+    start: Union[int, float] = 1
+    stop: Optional[Union[int, float]] = None  # End value (inclusive)
+    step: Optional[Union[int, float]] = None  # Step size
+    num_steps: Optional[int] = None  # For linspace-style (float only)
+    precision: int = 10  # Decimal precision for float
+    # Legacy field for backwards compatibility
+    max: Optional[Union[int, float]] = None  # Alias for stop (deprecated)
+    step_func: Optional[str] = None  # Future: custom step functions
+
+    def __post_init__(self):
+        """Handle legacy 'max' field."""
+        if self.max is not None and self.stop is None:
+            self.stop = self.max
+
+    def to_iterator(self) -> "SequenceIterator":
+        """
+        Create a SequenceIterator from this definition.
+
+        Returns:
+            IntIterator or FloatIterator based on type
+
+        Raises:
+            ValueError: If configuration is invalid
+        """
+        from utils.iterators import IntIterator, FloatIterator
+
+        if self.type == "int":
+            step = self.step if self.step is not None else 1
+            stop = self.stop if self.stop is not None else 1000000
+            return IntIterator(
+                start=int(self.start),
+                stop=int(stop),
+                step=int(step),
+                dtype=self.dtype if self.dtype in ("int", "int32", "int64", "uint64") else "int",
+            )
+        elif self.type == "float":
+            stop = self.stop if self.stop is not None else 1.0
+            return FloatIterator(
+                start=float(self.start),
+                stop=float(stop),
+                step=float(self.step) if self.step is not None else None,
+                num_steps=self.num_steps,
+                precision=self.precision,
+                dtype=self.dtype if self.dtype in ("float32", "float64") else "float64",
+            )
+        else:
+            raise ValueError(f"Unknown iterator type: {self.type}")
+
+
+# Forward reference for type hints
+if TYPE_CHECKING:
+    from utils.iterators import SequenceIterator
 
 
 @dataclass
@@ -843,6 +900,237 @@ def show_config(
     if config.prefer:
         print(f"  prefer: {config.prefer}")
     print()
+
+
+# =============================================================================
+# Iterator Definition Parsing (Issue #37)
+# =============================================================================
+
+def parse_iterator_def(var_spec: str) -> Tuple[str, IteratorDef]:
+    """
+    Parse compact iterator definition syntax.
+
+    Syntax: VAR:START:STOP[:STEP][:TYPE]
+
+    Examples:
+        "n:1:1000"           -> n from 1 to 1000, step 1, int
+        "n:1:1000:2"         -> n from 1 to 1000, step 2, int
+        "n:1:1000:1:uint64"  -> n from 1 to 1000, step 1, dtype uint64
+        "x:0.0:1.0"          -> x from 0.0 to 1.0 (auto-detects float)
+        "x:0.0:1.0:0.1"      -> x from 0.0 to 1.0, step 0.1
+        "x:0.0:1.0::float32" -> x from 0.0 to 1.0, default step, dtype float32
+
+    Args:
+        var_spec: Compact iterator specification string
+
+    Returns:
+        Tuple of (variable_name, IteratorDef)
+
+    Raises:
+        ValueError: If syntax is invalid
+    """
+    parts = var_spec.split(':')
+
+    if len(parts) < 3:
+        raise ValueError(
+            f"Invalid iterator syntax: '{var_spec}'. "
+            f"Expected VAR:START:STOP[:STEP][:TYPE]"
+        )
+
+    var_name = parts[0].strip()
+    if not var_name:
+        raise ValueError(f"Empty variable name in: '{var_spec}'")
+
+    try:
+        start_str = parts[1].strip()
+        stop_str = parts[2].strip()
+
+        # Auto-detect type from values
+        is_float = '.' in start_str or '.' in stop_str
+
+        if is_float:
+            start = float(start_str)
+            stop = float(stop_str)
+            iter_type = "float"
+            default_dtype = "float64"
+        else:
+            start = int(start_str)
+            stop = int(stop_str)
+            iter_type = "int"
+            default_dtype = "int"
+
+    except ValueError as e:
+        raise ValueError(f"Invalid start/stop values in: '{var_spec}' - {e}")
+
+    # Parse optional step (parts[3])
+    step = None
+    if len(parts) > 3 and parts[3].strip():
+        try:
+            step_str = parts[3].strip()
+            if is_float or '.' in step_str:
+                step = float(step_str)
+                iter_type = "float"  # Step with decimal forces float
+            else:
+                step = int(step_str)
+        except ValueError as e:
+            raise ValueError(f"Invalid step value in: '{var_spec}' - {e}")
+
+    # Parse optional type/dtype (parts[4])
+    dtype = default_dtype
+    if len(parts) > 4 and parts[4].strip():
+        dtype = parts[4].strip().lower()
+        # Validate dtype
+        valid_int_dtypes = {"int", "int32", "int64", "uint64"}
+        valid_float_dtypes = {"float32", "float64"}
+        if iter_type == "int" and dtype not in valid_int_dtypes:
+            raise ValueError(
+                f"Invalid dtype '{dtype}' for integer iterator. "
+                f"Valid: {valid_int_dtypes}"
+            )
+        if iter_type == "float" and dtype not in valid_float_dtypes:
+            raise ValueError(
+                f"Invalid dtype '{dtype}' for float iterator. "
+                f"Valid: {valid_float_dtypes}"
+            )
+
+    return var_name, IteratorDef(
+        type=iter_type,
+        dtype=dtype,
+        start=start,
+        stop=stop,
+        step=step,
+    )
+
+
+def build_iterator_factories_from_args(
+    args,
+    bounds: Dict[str, int]
+) -> Dict[str, "Callable[[], SequenceIterator]"]:
+    """
+    Build iterator factory functions from CLI arguments.
+
+    This function bridges CLI arguments to the grammar's iterator_factories parameter.
+    It handles:
+    - --var VAR:START:STOP[:STEP][:TYPE] compact syntax (new)
+    - --iter-type, --iter-start, etc. individual flags (new)
+    - --max-n, --max-m legacy bounds (backwards compat)
+
+    Args:
+        args: Parsed argparse namespace
+        bounds: Bounds dict from build_bounds_from_args()
+
+    Returns:
+        Dict mapping variable names to factory functions
+    """
+    from utils.iterators import IntIterator
+
+    factories: Dict[str, Callable] = {}
+    iterator_defs: Dict[str, IteratorDef] = {}
+
+    # 1. Parse --var compact syntax (if present)
+    if hasattr(args, 'iter_var') and args.iter_var:
+        for var_spec in args.iter_var:
+            try:
+                var_name, iter_def = parse_iterator_def(var_spec)
+                iterator_defs[var_name] = iter_def
+            except ValueError as e:
+                # Re-raise with context
+                raise ValueError(f"Error parsing --var: {e}")
+
+    # 2. Apply individual --iter-* overrides
+    if hasattr(args, 'iter_type') and args.iter_type:
+        for override in args.iter_type:
+            var_name, value = _parse_iter_override(override, "type")
+            if var_name not in iterator_defs:
+                iterator_defs[var_name] = IteratorDef()
+            iterator_defs[var_name].type = value
+
+    if hasattr(args, 'iter_start') and args.iter_start:
+        for override in args.iter_start:
+            var_name, value = _parse_iter_override(override, "start")
+            if var_name not in iterator_defs:
+                iterator_defs[var_name] = IteratorDef()
+            iterator_defs[var_name].start = _parse_numeric(value)
+
+    if hasattr(args, 'iter_stop') and args.iter_stop:
+        for override in args.iter_stop:
+            var_name, value = _parse_iter_override(override, "stop")
+            if var_name not in iterator_defs:
+                iterator_defs[var_name] = IteratorDef()
+            iterator_defs[var_name].stop = _parse_numeric(value)
+
+    if hasattr(args, 'iter_step') and args.iter_step:
+        for override in args.iter_step:
+            var_name, value = _parse_iter_override(override, "step")
+            if var_name not in iterator_defs:
+                iterator_defs[var_name] = IteratorDef()
+            iterator_defs[var_name].step = _parse_numeric(value)
+
+    if hasattr(args, 'iter_num_steps') and args.iter_num_steps:
+        for override in args.iter_num_steps:
+            var_name, value = _parse_iter_override(override, "num_steps")
+            if var_name not in iterator_defs:
+                iterator_defs[var_name] = IteratorDef()
+            iterator_defs[var_name].num_steps = int(value)
+
+    if hasattr(args, 'iter_dtype') and args.iter_dtype:
+        for override in args.iter_dtype:
+            var_name, value = _parse_iter_override(override, "dtype")
+            if var_name not in iterator_defs:
+                iterator_defs[var_name] = IteratorDef()
+            iterator_defs[var_name].dtype = value.lower()
+
+    # 3. Convert IteratorDefs to factory functions
+    for var_name, iter_def in iterator_defs.items():
+        # Capture iter_def in closure properly
+        def make_factory(idef):
+            return lambda: idef.to_iterator()
+        factories[var_name] = make_factory(iter_def)
+
+    # 4. For variables in bounds but not in factories, create default factories
+    # (This maintains backwards compatibility with --max-n)
+    for var_name, max_val in bounds.items():
+        if var_name not in factories:
+            # Create a factory that uses the bound
+            def make_bound_factory(stop):
+                return lambda: IntIterator(1, stop, 1)
+            factories[var_name] = make_bound_factory(max_val)
+
+    return factories
+
+
+def _parse_iter_override(override: str, field_name: str) -> Tuple[str, str]:
+    """
+    Parse VAR:VALUE format for --iter-* flags.
+
+    Args:
+        override: String in "VAR:VALUE" format
+        field_name: Name of field being parsed (for error messages)
+
+    Returns:
+        Tuple of (variable_name, value_string)
+
+    Raises:
+        ValueError: If format is invalid
+    """
+    if ':' not in override:
+        raise ValueError(
+            f"Invalid --iter-{field_name} format: '{override}'. "
+            f"Expected VAR:VALUE"
+        )
+    parts = override.split(':', 1)
+    return parts[0].strip(), parts[1].strip()
+
+
+def _parse_numeric(value: str) -> Union[int, float]:
+    """Parse string to int or float based on content."""
+    if '.' in value or 'e' in value.lower():
+        return float(value)
+    return int(value)
+
+
+# Type hint for Callable
+from typing import Callable
 
 
 # =============================================================================
