@@ -10,6 +10,7 @@ private/
 
 # Local development notes (project-specific guidance)
 CLAUDE.md
+.claude/
 
 # Python
 venv/
@@ -34,3 +35,6 @@ Thumbs.db
 
 # Checkpoints
 checkpoint.json
+
+# Lean 4 / Mathlib build artifacts (restored via `lake exe cache get`)
+.lake/

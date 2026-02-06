@@ -295,6 +295,28 @@ python --version
 ```
 On Windows, primesieve requires Python 3.10 (not 3.11 or 3.12).
 
+## Lean 4 Proofs (Optional)
+
+The `proofs/` directory contains formal mathematical proofs in [Lean 4](https://lean-lang.org/) with [Mathlib](https://leanprover-community.github.io/mathlib4_docs/). This is optional — the Python program works without it.
+
+```bash
+# 1. Install elan (Lean version manager)
+# Windows PowerShell:
+irm https://raw.githubusercontent.com/leanprover/elan/master/elan-init.ps1 | iex
+# Linux/Mac:
+curl https://elan.lean-lang.org/elan-init.sh -sSf | sh
+
+# 2. Download prebuilt Mathlib cache (~1.5GB)
+lake exe cache get
+
+# 3. Build proofs
+lake build
+```
+
+The `lean-toolchain` and `lakefile.toml` are committed to the repo. The `.lake/` directory (build artifacts + Mathlib packages) is gitignored and restored via `lake exe cache get`.
+
+See [proofs/README.md](../proofs/README.md) for details on what's proven.
+
 ## Requirements Files
 
 | File | Purpose |

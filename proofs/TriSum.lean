@@ -8,6 +8,10 @@
   This file demonstrates how to build up proofs from definitions.
 -/
 
+import Mathlib.Data.Nat.Sqrt
+import Mathlib.Tactic.Ring
+import Mathlib.Algebra.Ring.Parity
+
 -- ============================================================
 -- PART 1: Triangular Numbers
 -- ============================================================
@@ -22,6 +26,9 @@ def tri (n : Nat) : Nat := n * (n + 1) / 2
 #eval tri 4   -- 10
 #eval tri 10  -- 55
 #eval tri 36  -- 666
+
+/-- Lemma: tri(0) = 0 (base case for induction) -/
+theorem tri_zero : tri 0 = 0 := by native_decide
 
 /-- Lemma: tri(1) = 1 -/
 theorem tri_one : tri 1 = 1 := by native_decide
@@ -48,9 +55,22 @@ theorem tri_thirtysix : tri 36 = 666 := by native_decide
 -/
 theorem tri_succ (n : Nat) : tri (n + 1) = tri n + (n + 1) := by
   unfold tri
-  -- Key insight: n*(n+1) is always even, so we can manipulate the divisions
-  -- For now, we verify specific cases and leave the general proof for Mathlib
-  sorry  -- Requires: Nat.add_div_right, proof that n*(n+1) % 2 = 0
+  -- (n+1)*(n+2) = n*(n+1) + (n+1)*2, then apply Nat.add_mul_div_right
+  have h : (n + 1) * (n + 1 + 1) = n * (n + 1) + (n + 1) * 2 := by ring
+  rw [h, Nat.add_mul_div_right _ _ (by norm_num : (0 : Nat) < 2)]
+
+/--
+  The division-free formula: 2 * tri(n) = n * (n + 1)
+
+  Proved by induction using tri_zero and tri_succ.
+  This avoids Nat division entirely and captures the essential identity.
+-/
+theorem two_mul_tri (n : Nat) : 2 * tri n = n * (n + 1) := by
+  induction n with
+  | zero => simp [tri_zero]
+  | succ k ih =>
+    rw [tri_succ, Nat.mul_add, ih]
+    ring
 
 -- ============================================================
 -- PART 2: Checking if a number is triangular
@@ -76,7 +96,23 @@ def isTriangular (t : Nat) : Bool :=
 
 /-- If tri(n) produces t, then t is triangular -/
 theorem tri_is_triangular (n : Nat) : isTriangular (tri n) = true := by
-  sorry  -- This requires more machinery to prove formally
+  unfold isTriangular tri
+  -- Step 1: Prove the discriminant equals the perfect square (2n + 1)²
+  have h_disc : 1 + 8 * (n * (n + 1) / 2) = (2 * n + 1) ^ 2 := by
+    -- Since n*(n+1) is always even, merge the 8* and /2:
+    -- 8 * (x / 2) = 8 * x / 2 (by Nat.mul_div_assoc, applied backwards)
+    rw [← Nat.mul_div_assoc _ (Nat.even_mul_succ_self n).two_dvd]
+    -- Now: 1 + 8 * (n * (n + 1)) / 2 = (2 * n + 1) ^ 2
+    -- Rewrite 8 * (n * (n + 1)) as 2 * (4 * (n * (n + 1))) to cancel /2
+    have h8 : 8 * (n * (n + 1)) = 2 * (4 * (n * (n + 1))) := by ring
+    rw [h8, Nat.mul_div_cancel_left _ (by norm_num : (0 : Nat) < 2)]
+    -- Now: 1 + 4 * (n * (n + 1)) = (2 * n + 1) ^ 2
+    ring
+  -- Step 2: Substitute the discriminant and simplify
+  simp only [h_disc, Nat.sqrt_eq']
+  -- Step 3: The boolean conditions reduce to decidable arithmetic
+  -- Need: (2n+1)*(2n+1) == (2n+1)^2 && (2n+1-1) % 2 == 0
+  simp [Nat.pow_two]
 
 -- ============================================================
 -- PART 3: The 5-State XOR Cycle
@@ -107,7 +143,7 @@ def F : LogicState := ⟨false, false, false, false⟩
 
 /-- XOR operation on logic states (component-wise) -/
 def LogicState.xor (a b : LogicState) : LogicState :=
-  ⟨xor a.tt b.tt, xor a.tf b.tf, xor a.ft b.ft, xor a.ff b.ff⟩
+  ⟨Bool.xor a.tt b.tt, Bool.xor a.tf b.tf, Bool.xor a.ft b.ft, Bool.xor a.ff b.ff⟩
 
 instance : HXor LogicState LogicState LogicState where
   hXor := LogicState.xor
@@ -196,10 +232,8 @@ theorem recast_n3_triangular : isTriangular 55 = true := by native_decide
 theorem recast_n4_triangular : isTriangular 666 = true := by native_decide
 theorem recast_n5_NOT_triangular : isTriangular 7455 = false := by native_decide
 
-/--
-  COROLLARY: The pattern breaks at n=5, suggesting base-10 (= 2×5)
-  is a structural boundary.
--/
+-- COROLLARY: The pattern breaks at n=5, suggesting base-10 (= 2x5)
+-- is a structural boundary.
 
 -- ============================================================
 -- PART 7: Deep Triangular Structure
@@ -211,13 +245,53 @@ theorem deep_structure_n3 : tri (tri 4) = 55 := by native_decide
 /-- For n=4: Recast = 666 = Tri[36] = Tri[Tri[8]] -/
 theorem deep_structure_n4 : tri (tri 8) = 666 := by native_decide
 
-/--
-  Observation: The index doubles from 4 to 8 as we go from n=3 to n=4.
-  At n=3: index = 4 = n + 1
-  At n=4: index = 8 = 2n
+-- Observation: The index doubles from 4 to 8 as we go from n=3 to n=4.
+-- At n=3: index = 4 = n + 1
+-- At n=4: index = 8 = 2n
+-- This transition occurs exactly at base-10.
 
-  This transition occurs exactly at base-10.
+-- ============================================================
+-- PART 8: Synthesis — How the Pieces Fit Together
+-- ============================================================
+
+/-
+  This section demonstrates how the fundamental building blocks compose.
+  The dependency chain is:
+
+    tri_zero (base case)
+        ↓
+    tri_succ (recursion: tri(n+1) = tri(n) + (n+1))
+        ↓
+    two_mul_tri (induction: 2·tri(n) = n·(n+1))
+        ↓
+    tri_is_triangular (correctness: isTriangular(tri(n)) = true)
+        ↓
+    tri_tri_is_triangular (composition: tri(tri(n)) is triangular)
+    tri_plus_succ_is_triangular (chaining: tri(n)+(n+1) is triangular)
+        ↓
+    deep_tri_n3_triangular (55 is triangular because 55 = tri(tri(4)))
+    deep_tri_n4_triangular (666 is triangular because 666 = tri(tri(8)))
 -/
+
+/-- Composition: tri(tri(n)) is always triangular.
+    Proof: tri(tri(n)) is tri applied to a natural number. -/
+theorem tri_tri_is_triangular (n : Nat) : isTriangular (tri (tri n)) = true :=
+  tri_is_triangular (tri n)
+
+/-- Chaining tri_succ with tri_is_triangular:
+    adding (n+1) to tri(n) always yields a triangular number. -/
+theorem tri_plus_succ_is_triangular (n : Nat) :
+    isTriangular (tri n + (n + 1)) = true := by
+  rw [← tri_succ]
+  exact tri_is_triangular (n + 1)
+
+/-- 55 is triangular — proved structurally via tri(tri(4)), not by computation. -/
+theorem deep_tri_n3_triangular : isTriangular (tri (tri 4)) = true :=
+  tri_tri_is_triangular 4
+
+/-- 666 is triangular — proved structurally via tri(tri(8)), not by computation. -/
+theorem deep_tri_n4_triangular : isTriangular (tri (tri 8)) = true :=
+  tri_tri_is_triangular 8
 
 -- ============================================================
 -- SUMMARY
@@ -226,17 +300,34 @@ theorem deep_structure_n4 : tri (tri 8) = 666 := by native_decide
 /-
   What we've proven:
 
-  1. Basic triangular number identities (tri 1 = 1, tri 4 = 10, tri 36 = 666)
+  1. Triangular number foundations:
+     tri_zero, tri_one, ..., tri_thirtysix — basic identities
+     tri_succ — recursion: tri(n+1) = tri(n) + (n+1)
+     two_mul_tri — division-free formula: 2·tri(n) = n·(n+1)
+                   (proved by induction on tri_zero + tri_succ)
 
-  2. The XOR cycle theorem:
+  2. Correctness bridge:
+     tri_is_triangular — isTriangular(tri(n)) = true for all n
+                         (uses Nat.sqrt, even/odd, ring)
+
+  3. Composition and chaining:
+     tri_tri_is_triangular — tri(tri(n)) is always triangular
+     tri_plus_succ_is_triangular — tri(n)+(n+1) is triangular
+                                   (chains tri_succ + tri_is_triangular)
+
+  4. Concrete applications (structural proofs, not native_decide):
+     deep_tri_n3_triangular — 55 is triangular because 55 = tri(tri(4))
+     deep_tri_n4_triangular — 666 is triangular because 666 = tri(tri(8))
+
+  5. The XOR cycle theorem:
      ((((G₀ ⊕ G₁) ⊕ G₀) ⊕ G₁) ⊕ G₀) = G₀
      producing 5 states from 2 constants
 
-  3. The bounded TriSum-Recast theorem:
+  6. The bounded TriSum-Recast theorem:
      Recast values are triangular for n ∈ {2, 3, 4}
      Pattern breaks at n = 5
 
-  4. Deep structure:
+  7. Deep structure:
      Tri[Tri[4]] = 55 (n=3 case)
      Tri[Tri[8]] = 666 (n=4 case)
 
@@ -245,5 +336,3 @@ theorem deep_structure_n4 : tri (tri 8) = 666 := by native_decide
   - Why the pattern breaks at n=5
   - Connection to φ = (1 + √5)/2
 -/
-
-end

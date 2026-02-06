@@ -148,6 +148,70 @@ Numbers in this sequence may have special properties related to prime sums:
 
 ---
 
+## Conjecture 5: The stf-k² Divisibility Conjecture
+
+### Statement
+
+For a triangular base b = tri(r), the value stf(b) is divisible by 6 if and only if r is a perfect square (r = k² for integer k > 1).
+
+Equivalently: 6 | stf(tri(k²)) for all k ≥ 2, and 6 ∤ stf(tri(r)) when r is not a perfect square.
+
+### Empirical Evidence
+
+**Positive cases (r = k², stf divisible by 6):**
+
+| k | r = k² | b = tri(r) | stf(b) | stf(b) / 6 |
+|---|--------|------------|--------|-------------|
+| 2 | 4 | 10 | 666 | 111 |
+| 3 | 9 | 45 | 3,988,218,576,606 | 664,703,096,101 |
+| 4 | 16 | 136 | 12,865,295,974,223,209,450,913,102,309,400 | 2,144,215,995,703,868,241,818,850,384,900 |
+| 5 | 25 | 325 | (61-digit number) | (60-digit number) |
+
+All four produce a Pascal Row 4 "pure center" representation [0, 0, X, 0, 0] where X = stf(b)/6.
+
+**Negative cases (r not a perfect square, stf NOT divisible by 6):**
+
+All 14 non-square r values tested (r = 3, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 17, 18, 19) produce stf(b) with non-zero remainder mod 6. The separation is absolute across all 18 values tested.
+
+### Key Property: Not Reducible to Modular Arithmetic
+
+The pattern depends on r being a **perfect square**, not on any simple modular property of r:
+- r = 13 (r % 12 = 1, NOT a perfect square): stf % 6 = 3
+- r = 25 (r % 12 = 1, IS a perfect square): stf % 6 = 0
+
+Same residue mod 12, different stf % 6 result.
+
+### Structural Constraint for stf(b) = primesum(n, 2)
+
+Combined with the proven primesum(n,2) mod 6 theorem (see `proofs/`), for the identity stf(b) = primesum(n, 2) to hold, BOTH conditions must be satisfied:
+- **stf side**: r = qg(b) must be a perfect square (by this conjecture)
+- **primesum side**: n ≡ 1 (mod 6) (proven theorem)
+
+**Application to stf(666)**: r = qg(666) = 36 = 6². Since 36 is a perfect square, stf(666) is predicted to be divisible by 6. Verified: stf(666) mod 6 = 0. This is consistent — it does NOT rule out stf(666) = primesum(n, 2) for some n ≡ 1 (mod 6).
+
+### Origin
+
+Discovered 2026-02-06 during Pascal-weighted number system exploration. The "pure center" pattern in Pascal Row 4 representations of stf values led to checking divisibility by 6, which revealed the perfect-square correlation.
+
+### Status
+
+- [x] Verified for k = 2, 3, 4, 5 (positive cases)
+- [x] Verified for 14 non-square r values (negative cases)
+- [x] Confirmed not reducible to modular arithmetic on r
+- [x] Applied to stf(666) — consistent
+- [ ] Extend verification to k = 6, 7, ... (larger perfect squares)
+- [ ] Prove algebraically: why does r = k² force 6 | stf(tri(r))?
+- [ ] Investigate whether the "pure center" Row 4 representation holds for all k
+
+### See Also
+
+- `tests/one-offs/thinking/2026-02-06__stf-k-squared-conjecture-test.py` — verification script
+- `tests/one-offs/thinking/2026-02-06__stf-mod6-pattern-analysis.py` — mod 6 analysis
+- `tests/one-offs/thinking/2026-02-06__stf666-constraint-check.py` — stf(666) constraint check
+- `proofs/primesum_mod6.lean` — formal proof of the primesum(n,2) mod 6 theorem
+
+---
+
 ## Observation: The 5/2 Boundary
 
 ### Context

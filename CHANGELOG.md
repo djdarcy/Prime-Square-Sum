@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.11] - 2026-02-06
+
+### Added
+- **Lean 4 + Mathlib v4.27.0 infrastructure**
+  - `lakefile.toml`, `lean-toolchain`, `lake-manifest.json` at repo root
+  - Proof files in `proofs/` — each as its own Lean library (`TriSum`, `PrimesumMod6`)
+  - `.gitignore` updated for `.lake/` build artifacts
+- **`tri_is_triangular` proved** — last `sorry` eliminated, all proofs fully machine-verified
+  - Uses `Nat.sqrt`, `Nat.even_mul_succ_self`, `ring` to show `isTriangular(tri(n)) = true` for all n
+  - Proves the discriminant `1 + 8·tri(n) = (2n+1)²` is always a perfect square
+- **New theorems in TriSum.lean** (Part 8 synthesis section)
+  - `tri_zero` — base case: tri(0) = 0
+  - `two_mul_tri` — division-free formula: 2·tri(n) = n·(n+1), proved by induction
+  - `tri_tri_is_triangular` — composition: tri(tri(n)) is always triangular
+  - `tri_plus_succ_is_triangular` — chaining: tri(n)+(n+1) is triangular
+  - `deep_tri_n3_triangular` — 55 is triangular via tri(tri(4)), not computation
+  - `deep_tri_n4_triangular` — 666 is triangular via tri(tri(8)), not computation
+- **New proof file: `PrimesumMod6.lean`**
+  - primesum(n,2) ≡ (n+5) mod 6 for all n ≥ 3
+  - Algebraic core: (6k+1)² % 6 = 1 and (6k+5)² % 6 = 1 (ring + omega)
+  - Bounded verification for n = 3..7
+- **Conjecture 5** (stf-k² pattern) added to `paper and notes/conjectures.md`
+- **`utils/pascal_systems.py`** — Pascal-weighted number system analytical tools
+- 8 verification/thinking scripts in `tests/one-offs/thinking/`
+
+### Technical Notes
+- Proof dependency chain: tri_zero → tri_succ → two_mul_tri → tri_is_triangular → tri_tri_is_triangular
+- Structural proofs for 55 and 666 avoid `native_decide` by composing general theorems
+- Gem consulted for proof strategy; API names verified against Mathlib source
+
+### Design Documents
+- `2026-02-06__16-16-09__full-postmortem_tri-is-triangular-proof-and-synthesis.md`
+- `2026-02-06__15-27-22__full-postmortem_pascal-exploration-lean-mathlib-setup.md`
+
 ## [0.7.10] - 2026-02-06
 
 ### Added

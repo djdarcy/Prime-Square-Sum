@@ -145,6 +145,7 @@ For venv, pip, Docker, GPU setup, and detailed troubleshooting, see [docs/instal
 | [docs/equations.md](docs/equations.md) | Saved equations and `equations.json` format |
 | [docs/functions.md](docs/functions.md) | Function reference and custom functions |
 | [docs/install.md](docs/install.md) | Installation and setup guide |
+| [proofs/README.md](proofs/README.md) | Lean 4 formal proofs (Mathlib) |
 
 ### Verify GPU Setup
 
@@ -170,7 +171,7 @@ Prime-Square-Sum/
 ├── run_tests.py             # Test runner
 ├── utils/                   # Sieve, I/O, GPU utilities
 ├── tests/                   # Unit tests
-├── proofs/                  # Lean 4 proofs
+├── proofs/                  # Lean 4 + Mathlib formal proofs
 ├── verification/            # Verification scripts
 ├── paper and notes/         # Mathematica notebook
 └── data/                    # Prime files (download from Releases)
