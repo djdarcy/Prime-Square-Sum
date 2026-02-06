@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.9] - 2026-02-06
+
+### Added
+- **Function namespace system** (Issue #46)
+  - Three namespaces: `math.*`, `pss.*`, `user.*`
+  - Qualified names always resolve: `math.pow(2, 10)`, `pss.tri(36)`
+  - Unqualified names resolve by priority: user > pss > math
+  - Dotted name support in Lark grammar
+  - `--list-functions` output grouped by namespace
+  - `--list-equations` now shows compact function summary at bottom
+- **Auto-registered Python math module** under `math.*` namespace
+  - All 53 callable functions from Python's `math` module
+  - Includes: sin, cos, tan, log, exp, gcd, lcm, gamma, erf, and more
+  - Custom wrappers for pow (int-preserving), sqrt (perfect-square detection),
+    floor, ceil, abs, mod
+- **User function namespacing** via `--functions`
+  - User functions registered under `user.*` namespace
+  - Collisions handled via priority (user wins unqualified, builtins preserved qualified)
+  - No warnings for expected namespace collisions
+- 32 new tests (namespace resolution, dotted name parsing, integration) - 561 total
+
+### Changed
+- `FunctionSignature` now includes `namespace` field
+- `FunctionRegistry` uses dual registration (qualified + unqualified)
+- `--list-functions` displays grouped by namespace with priority note
+
+### Related Issues
+- Issue #46: Function namespace and collision prevention
+- Issue #44: Grammar arithmetic operators (sub-issue parent)
+
+### Design Documents
+- `2026-02-06__09-16-47__function-namespace-collision-prevention.md`
+
 ## [0.7.8] - 2026-02-06
 
 ### Added

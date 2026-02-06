@@ -298,13 +298,40 @@ Comparison operators: ==, !=, <, >, <=, >=
 # =============================================================================
 
 def handle_list_functions(registry: FunctionRegistry) -> int:
-    """List all available functions."""
+    """List all available functions grouped by namespace."""
+    signatures = registry.list_signatures()
+
+    # Group by namespace
+    groups: dict = {}
+    for name, description in signatures.items():
+        if '.' in name:
+            ns = name.split('.')[0]
+        else:
+            ns = "(other)"
+        groups.setdefault(ns, []).append(description)
+
     print("\nAvailable Functions:")
     print("=" * 60)
-    for name, description in registry.list_signatures().items():
-        print(f"  {description}")
+
+    # Display in priority order: user > pss > math
+    namespace_order = ["user", "pss", "math"]
+    for ns in namespace_order:
+        if ns in groups:
+            print(f"\n  [{ns}]")
+            for desc in sorted(groups[ns]):
+                print(f"    {desc}")
+            del groups[ns]
+
+    # Any remaining namespaces
+    for ns, descs in sorted(groups.items()):
+        print(f"\n  [{ns}]")
+        for desc in sorted(descs):
+            print(f"    {desc}")
+
+    print()
     print("=" * 60)
-    print(f"\nTotal: {len(registry)} functions")
+    print(f"\nUnqualified names resolve by priority: user > pss > math")
+    print(f"Total: {len(registry)} functions")
     return 0
 
 
@@ -540,6 +567,29 @@ def main():
     # List equations (Issue #21)
     if args.list_equations:
         print_equations_list()
+        # Show compact function summary for discoverability
+        compact = registry.list_compact()
+        ns_order = ["user", "pss", "math"]
+        shown = [ns for ns in ns_order if ns in compact]
+        shown += [ns for ns in sorted(compact) if ns not in ns_order]
+        if shown:
+            print("\nAvailable functions:")
+            for ns in shown:
+                names = compact[ns]
+                line = ', '.join(names)
+                if len(line) > 100:
+                    # Truncate to fit, show count
+                    truncated = []
+                    length = 0
+                    for n in names:
+                        addition = len(n) + (2 if truncated else 0)  # ", " separator
+                        if length + addition > 65:
+                            break
+                        truncated.append(n)
+                        length += addition
+                    line = f"{', '.join(truncated)}, ... ({len(names)} total)"
+                print(f"  {ns}: {line}")
+            print("  Use --list-functions for details.")
         return 0
 
     # === Main Expression Evaluation ===

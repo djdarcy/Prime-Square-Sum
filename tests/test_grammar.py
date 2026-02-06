@@ -907,3 +907,102 @@ class TestIteratorFactories:
 
         assert len(results) == 1
         assert abs(results[0]['x'] - 0.5) < 1e-9
+
+
+# =============================================================================
+# Dotted Names / Namespace Grammar Tests (Issue #46)
+# =============================================================================
+
+class TestDottedNames:
+    """Tests for dotted function names in grammar (Issue #46)."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    def test_parse_math_namespace(self, parser):
+        """Parse math.pow(n, 2) == 25."""
+        ast = parser.parse("does_exist math.pow(n, 2) == 25")
+        assert ast.comparison.left == FunctionCall("math.pow", [Variable("n"), Literal(2)])
+
+    def test_parse_pss_namespace(self, parser):
+        """Parse pss.tri(n) == 666."""
+        ast = parser.parse("does_exist pss.tri(n) == 666")
+        assert ast.comparison.left == FunctionCall("pss.tri", [Variable("n")])
+
+    def test_parse_user_namespace(self, parser):
+        """Parse user.custom(n) == 42."""
+        ast = parser.parse("does_exist user.custom(n) == 42")
+        assert ast.comparison.left == FunctionCall("user.custom", [Variable("n")])
+
+    def test_parse_unqualified_still_works(self, parser):
+        """Unqualified names still parse correctly."""
+        ast = parser.parse("does_exist primesum(n, 2) == 666")
+        assert ast.comparison.left == FunctionCall("primesum", [Variable("n"), Literal(2)])
+
+    def test_parse_mixed_qualified_unqualified(self, parser):
+        """Mix of qualified and unqualified in same expression."""
+        ast = parser.parse("does_exist math.pow(n, 2) == pss.tri(m)")
+        assert ast.comparison.left == FunctionCall("math.pow", [Variable("n"), Literal(2)])
+        assert ast.comparison.right == FunctionCall("pss.tri", [Variable("m")])
+
+    def test_parse_float_not_confused(self, parser):
+        """Float literal 2.5 is not confused with a dotted name."""
+        ast = parser.parse("does_exist math.pow(n, 2.5) == 100")
+        assert ast.comparison.left.args[1] == Literal(2.5)
+        assert ast.comparison.left.name == "math.pow"
+
+    def test_parse_nested_dotted(self, parser):
+        """Nested dotted function calls."""
+        ast = parser.parse("does_exist pss.tri(pss.qtri(666)) == 666")
+        outer = ast.comparison.left
+        assert outer.name == "pss.tri"
+        inner = outer.args[0]
+        assert inner.name == "pss.qtri"
+        assert inner.args == [Literal(666)]
+
+
+class TestDottedNameIntegration:
+    """Integration tests for namespaced function evaluation (Issue #46)."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def evaluator(self):
+        from utils.function_registry import FunctionRegistry
+        return ExpressionEvaluator(FunctionRegistry())
+
+    def test_qualified_math_evaluates(self, parser, evaluator):
+        """Qualified math function call evaluates correctly."""
+        expr = parser.parse("verify math.pow(2, 10) == 1024")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0] == {"__verify_result__": True}
+
+    def test_qualified_pss_evaluates(self, parser, evaluator):
+        """Qualified PSS function call evaluates correctly."""
+        expr = parser.parse("verify pss.tri(36) == 666")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0] == {"__verify_result__": True}
+
+    def test_qualified_trig_evaluates(self, parser, evaluator):
+        """Auto-registered trig function evaluates in expression."""
+        expr = parser.parse("verify math.floor(math.sin(0)) == 0")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0] == {"__verify_result__": True}
+
+    def test_nested_qualified_evaluates(self, parser, evaluator):
+        """Nested qualified calls evaluate correctly."""
+        expr = parser.parse("verify pss.tri(pss.qtri(666)) == 666")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0] == {"__verify_result__": True}
+
+    def test_mixed_namespaces_search(self, parser, evaluator):
+        """Search with mixed namespaces finds results."""
+        expr = parser.parse("does_exist math.pow(n, 2) == pss.tri(m)")
+        matches = list(find_matches(expr, evaluator, {"n": 10, "m": 10}))
+        # Verify any match found is correct
+        for match in matches:
+            n, m = match['n'], match['m']
+            assert n ** 2 == m * (m + 1) // 2

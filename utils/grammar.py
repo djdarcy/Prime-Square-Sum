@@ -102,7 +102,7 @@ GRAMMAR = r"""
     literal: NUMBER
     variable: NAME
 
-    NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
+    NAME: /[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*/
     NUMBER: /[0-9]+(\.[0-9]+)?/
 
     %import common.WS

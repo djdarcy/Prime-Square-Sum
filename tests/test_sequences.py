@@ -293,8 +293,8 @@ class TestFunctionRegistryIntegration:
 
         registry = FunctionRegistry()
 
-        # 6 original (tri, qtri, trisum, is_triangular, digital_root, nth_prime)
-        # + 4 sequences (primesum, fibonacci, factorial, catalan)
-        # + 6 math functions (pow, abs, mod, sqrt, floor, ceil)
-        # = 16 total
-        assert len(registry) == 16
+        # 10 PSS functions (tri, qtri, trisum, is_triangular, digital_root,
+        #   nth_prime, primesum, fibonacci, factorial, catalan)
+        # + all Python math module functions + custom wrappers (abs, mod)
+        # unique_count() avoids double-counting qualified/unqualified aliases
+        assert len(registry) >= 60  # 10 pss + 50+ math functions

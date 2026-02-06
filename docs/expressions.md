@@ -81,7 +81,19 @@ Use `--list-functions` to see all available functions:
 python prime-square-sum.py --list-functions
 ```
 
-**Built-in functions:**
+Functions can be called with or without a namespace qualifier:
+
+```bash
+# Unqualified (resolved by priority: user > pss > math)
+--expr "does_exist pow(n, 2) == tri(m)"
+
+# Qualified (always resolves to specific namespace)
+--expr "does_exist math.pow(n, 2) == pss.tri(m)"
+```
+
+Available namespaces: `pss` (tool-specific), `math` (Python math module), `user` (from `--functions`). See [functions.md](functions.md) for details.
+
+**PSS built-in functions:**
 
 | Function | Description | Example |
 |----------|-------------|---------|
@@ -92,6 +104,8 @@ python prime-square-sum.py --list-functions
 | `factorial(n)` | n! | `factorial(5) = 120` |
 | `catalan(n)` | nth Catalan number | `catalan(5) = 42` |
 | `digital_root(x)` | Digital root | `digital_root(666) = 9` |
+
+**Math functions** (all Python `math` module functions available via `math.*`):
 
 ### Variables and Bounds
 

@@ -2,11 +2,12 @@
 Tests for FunctionRegistry plugin architecture.
 """
 
+import math
 import pytest
 import tempfile
 from pathlib import Path
 
-from utils.function_registry import FunctionRegistry, FunctionSignature
+from utils.function_registry import FunctionRegistry, FunctionSignature, NAMESPACE_PRIORITY
 
 
 class TestFunctionSignature:
@@ -129,7 +130,11 @@ class TestFunctionMetadata:
         registry = FunctionRegistry()
         for name in registry.names():
             sig = registry.get_signature(name)
-            assert sig.name == name
+            # Qualified keys like "math.pow" have sig.name="pow"
+            if '.' in name:
+                assert sig.name == name.split('.', 1)[1]
+            else:
+                assert sig.name == name
             assert sig.arg_count >= 0
             assert sig.source == "builtin"
 
@@ -311,33 +316,48 @@ def documented_func(x):
 
 
 class TestFunctionOverride:
-    """Tests for function name collision handling."""
+    """Tests for function name collision handling with namespaces."""
 
-    def test_override_builtin_with_warning(self, tmp_path):
-        """Test that overriding a built-in generates a warning."""
+    def test_user_overrides_unqualified(self, tmp_path):
+        """Test that user function takes unqualified slot, builtin preserved."""
         func_file = tmp_path / "test_funcs.py"
-        func_file.write_text("def tri(x): return x * 3")  # Override tri
+        func_file.write_text("def tri(x): return x * 3")
 
         registry = FunctionRegistry()
+        registry.load_from_file(str(func_file))
 
-        with pytest.warns(UserWarning, match="being overridden"):
-            registry.load_from_file(str(func_file))
+        # Unqualified tri -> user version
+        assert registry.get("tri")(10) == 30
 
-        # The user function should now be active
-        assert registry.get("tri")(10) == 30  # Not tri(10)=55
+        # Qualified pss.tri -> original builtin preserved
+        assert registry.get("pss.tri")(10) == 55
 
-    def test_override_source_updated(self, tmp_path):
-        """Test that override updates the source."""
+        # Qualified user.tri -> user version
+        assert registry.get("user.tri")(10) == 30
+
+    def test_override_no_warning_with_namespaces(self, tmp_path):
+        """Test that namespace collisions don't emit warnings."""
         func_file = tmp_path / "test_funcs.py"
         func_file.write_text("def tri(x): return x * 3")
 
         registry = FunctionRegistry()
 
-        with pytest.warns(UserWarning):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             registry.load_from_file(str(func_file))
 
-        sig = registry.get_signature("tri")
+    def test_override_source_tracked(self, tmp_path):
+        """Test that user function source is tracked in user.* namespace."""
+        func_file = tmp_path / "test_funcs.py"
+        func_file.write_text("def tri(x): return x * 3")
+
+        registry = FunctionRegistry()
+        registry.load_from_file(str(func_file))
+
+        sig = registry.get_signature("user.tri")
         assert sig.source != "builtin"
+        assert sig.namespace == "user"
 
 
 class TestListFunctions:
@@ -348,23 +368,23 @@ class TestListFunctions:
         registry = FunctionRegistry()
         result = registry.list_functions()
         assert isinstance(result, dict)
-        assert "tri" in result
+        assert "pss.tri" in result
 
     def test_list_functions_has_descriptions(self):
         """Test that list_functions includes descriptions."""
         registry = FunctionRegistry()
         result = registry.list_functions()
-        # tri has a docstring
-        assert len(result["tri"]) > 0
+        # pss.tri has a docstring
+        assert len(result["pss.tri"]) > 0
 
     def test_list_signatures_format(self):
         """Test that list_signatures has proper format."""
         registry = FunctionRegistry()
         result = registry.list_signatures()
         assert isinstance(result, dict)
-        # Should have "name(args) - description" format
-        tri_sig = result["tri"]
-        assert "tri(" in tri_sig
+        # Should have "name(args) - description" format using qualified names
+        tri_sig = result["pss.tri"]
+        assert "pss.tri(" in tri_sig
         assert ")" in tri_sig
         assert " - " in tri_sig
 
@@ -566,3 +586,176 @@ class TestEdgeCases:
         registry = FunctionRegistry()
         with pytest.raises(ImportError):
             registry.load_from_file(str(func_file))
+
+
+class TestNamespaces:
+    """Tests for function namespace system (Issue #46)."""
+
+    def test_math_namespace_qualified(self):
+        """math.pow resolves to builtin pow."""
+        registry = FunctionRegistry()
+        fn = registry.get("math.pow")
+        assert fn(2, 10) == 1024
+
+    def test_pss_namespace_qualified(self):
+        """pss.tri resolves to builtin tri."""
+        registry = FunctionRegistry()
+        fn = registry.get("pss.tri")
+        assert fn(36) == 666
+
+    def test_unqualified_backward_compat(self):
+        """Unqualified names still resolve (backward compat)."""
+        registry = FunctionRegistry()
+        assert registry.get("pow")(2, 10) == 1024
+        assert registry.get("tri")(36) == 666
+        assert registry.get("primesum")(7, 2) == 666
+
+    def test_all_pss_builtins_qualified(self):
+        """All PSS builtins accessible via pss.* namespace."""
+        registry = FunctionRegistry()
+        pss_names = [
+            "tri", "qtri", "trisum", "is_triangular", "digital_root",
+            "nth_prime", "primesum", "fibonacci", "factorial", "catalan",
+        ]
+        for name in pss_names:
+            assert f"pss.{name}" in registry, f"pss.{name} not registered"
+
+    def test_math_module_auto_registered(self):
+        """All callable math module functions registered under math.*."""
+        registry = FunctionRegistry()
+        # Check a representative sample of auto-registered math functions
+        for name in ["sin", "cos", "tan", "log", "exp", "gcd"]:
+            assert f"math.{name}" in registry, f"math.{name} not registered"
+
+    def test_math_sin_cos_work(self):
+        """Auto-registered trig functions produce correct results."""
+        registry = FunctionRegistry()
+        sin_fn = registry.get("math.sin")
+        cos_fn = registry.get("math.cos")
+        assert abs(sin_fn(0.0)) < 1e-10
+        assert abs(cos_fn(0.0) - 1.0) < 1e-10
+        assert abs(sin_fn(math.pi / 2) - 1.0) < 1e-10
+
+    def test_math_log_exp_work(self):
+        """Auto-registered log/exp functions produce correct results."""
+        registry = FunctionRegistry()
+        exp_fn = registry.get("math.exp")
+        log_fn = registry.get("math.log")
+        assert abs(exp_fn(0) - 1.0) < 1e-10
+        assert abs(log_fn(math.e) - 1.0) < 1e-10
+
+    def test_math_gcd_lcm_work(self):
+        """Auto-registered gcd/lcm functions produce correct results."""
+        registry = FunctionRegistry()
+        gcd_fn = registry.get("math.gcd")
+        lcm_fn = registry.get("math.lcm")
+        assert gcd_fn(12, 8) == 4
+        assert lcm_fn(4, 6) == 12
+
+    def test_custom_pow_preserves_int(self):
+        """Our custom pow wrapper preserves int (math.pow returns float)."""
+        registry = FunctionRegistry()
+        result = registry.get("math.pow")(2, 10)
+        assert result == 1024
+        assert isinstance(result, int)
+
+    def test_custom_sqrt_perfect_square(self):
+        """Our custom sqrt returns int for perfect squares."""
+        registry = FunctionRegistry()
+        result = registry.get("math.sqrt")(25)
+        assert result == 5
+        assert isinstance(result, int)
+
+    def test_user_namespace_on_load(self, tmp_path):
+        """User functions registered under user.* namespace."""
+        func_file = tmp_path / "test_funcs.py"
+        func_file.write_text("def double(x): return x * 2")
+
+        registry = FunctionRegistry()
+        registry.load_from_file(str(func_file))
+
+        assert "user.double" in registry
+        assert "double" in registry
+        assert registry.get("user.double")(5) == 10
+        assert registry.get("double")(5) == 10
+
+    def test_user_overrides_math(self, tmp_path):
+        """User-defined pow takes unqualified slot, math.pow preserved."""
+        func_file = tmp_path / "test_funcs.py"
+        func_file.write_text("def pow(x): return x * x")
+
+        registry = FunctionRegistry()
+        registry.load_from_file(str(func_file))
+
+        # Unqualified pow -> user version (single arg)
+        assert registry.get("pow")(5) == 25
+        # Qualified math.pow -> builtin (two args)
+        assert registry.get("math.pow")(2, 10) == 1024
+        # Qualified user.pow -> user version
+        assert registry.get("user.pow")(5) == 25
+
+    def test_user_overrides_pss(self, tmp_path):
+        """User-defined tri takes unqualified slot, pss.tri preserved."""
+        func_file = tmp_path / "test_funcs.py"
+        func_file.write_text("def tri(x): return x * 3")
+
+        registry = FunctionRegistry()
+        registry.load_from_file(str(func_file))
+
+        assert registry.get("tri")(10) == 30       # user version
+        assert registry.get("pss.tri")(36) == 666  # builtin preserved
+        assert registry.get("user.tri")(10) == 30  # user qualified
+
+    def test_namespace_priority_order(self):
+        """Verify namespace priority: user > pss > math."""
+        assert NAMESPACE_PRIORITY == ["user", "pss", "math"]
+
+    def test_namespace_in_signature(self):
+        """FunctionSignature has namespace field populated."""
+        registry = FunctionRegistry()
+        sig = registry.get_signature("math.pow")
+        assert sig.namespace == "math"
+
+        sig2 = registry.get_signature("pss.tri")
+        assert sig2.namespace == "pss"
+
+    def test_pss_wins_over_math_for_factorial(self):
+        """pss.factorial wins unqualified slot over math.factorial."""
+        registry = FunctionRegistry()
+        # Unqualified factorial should be pss version
+        sig = registry.get_signature("factorial")
+        assert sig.namespace == "pss"
+
+        # Both qualified versions exist
+        assert "math.factorial" in registry
+        assert "pss.factorial" in registry
+
+    def test_unique_count(self):
+        """unique_count matches len() and counts each function once."""
+        registry = FunctionRegistry()
+        count = registry.unique_count()
+        assert count == len(registry)
+        # Should be significantly less than total keys
+        assert count < len(registry._functions)
+
+    def test_list_signatures_shows_qualified(self):
+        """list_signatures uses qualified names as keys."""
+        registry = FunctionRegistry()
+        sigs = registry.list_signatures()
+        assert "math.pow" in sigs
+        assert "pss.tri" in sigs
+        # Unqualified aliases should not appear
+        for key in sigs:
+            if sigs[key].startswith("pss.") or sigs[key].startswith("math."):
+                # Qualified entries have dot in key
+                assert '.' in key
+
+    def test_unknown_function_error_shows_unqualified(self):
+        """Error message shows unqualified names for readability."""
+        registry = FunctionRegistry()
+        with pytest.raises(ValueError) as exc_info:
+            registry.get("nonexistent")
+        # Should show unqualified names like 'tri', 'pow', not 'pss.tri'
+        error_msg = str(exc_info.value)
+        assert "tri" in error_msg
+        assert "pss.tri" not in error_msg

@@ -12,9 +12,41 @@ python prime-square-sum.py --list-functions
 python prime-square-sum.py --functions my_funcs.py --expr "does_exist my_func(n) == 666"
 ```
 
+## Namespaces (v0.7.9+)
+
+Functions are organized into namespaces to prevent collisions between builtins and user-defined functions.
+
+### Available Namespaces
+
+| Namespace | Contents | Example |
+|-----------|----------|---------|
+| `pss` | Tool-specific functions: tri, primesum, fibonacci, etc. | `pss.tri(36)` |
+| `math` | All Python math module functions + custom wrappers | `math.sin(3.14)` |
+| `user` | Functions loaded via `--functions` | `user.my_func(n)` |
+
+### Resolution Rules
+
+- **Unqualified names** (e.g., `pow`) resolve by priority: **user > pss > math**
+- **Qualified names** (e.g., `math.pow`) always resolve directly
+- Existing expressions using unqualified names continue to work unchanged
+
+### Collision Example
+
+```bash
+# my_funcs.py defines pow(x) = x * x (single argument)
+python prime-square-sum.py --functions my_funcs.py --expr "does_exist pow(n) == 25"
+# pow(n) uses YOUR pow (user namespace wins)
+
+# Access the builtin explicitly:
+python prime-square-sum.py --functions my_funcs.py --expr "does_exist math.pow(n, 2) == 25"
+# math.pow(n, 2) always uses the builtin
+```
+
+---
+
 ## Built-in Functions
 
-### Prime Functions
+### Prime Functions (pss)
 
 #### `primesum(n, power)`
 Sum of the first n primes raised to a power.
@@ -35,7 +67,7 @@ primesum(4, 3) = 503      # 2^3 + 3^3 + 5^3 + 7^3
 
 **Note:** This is the core function for investigating stf(b) relationships.
 
-### Triangular Functions
+### Triangular Functions (pss)
 
 #### `tri(n)`
 The nth triangular number: `(n^2 + n) / 2`
@@ -75,7 +107,7 @@ Row-sum of the digit triangle for base b. This is stf(b) from the original paper
 trisum(10) = 666    # 0123 + 456 + 78 + 9 in base 10
 ```
 
-### Sequence Functions
+### Sequence Functions (pss)
 
 #### `fibonacci(n)`
 The nth Fibonacci number (1-indexed).
@@ -107,7 +139,7 @@ catalan(5) = 42
 catalan(10) = 16796
 ```
 
-### Utility Functions
+### Utility Functions (pss)
 
 #### `digital_root(x)`
 The digital root (repeated digit sum until single digit).
@@ -118,9 +150,13 @@ digital_root(666) = 9     # 6+6+6 = 18, 1+8 = 9
 digital_root(12345) = 6   # 1+2+3+4+5 = 15, 1+5 = 6
 ```
 
-### Math Functions (v0.7.8+)
+### Math Functions (math)
 
-Built-in wrappers around Python's math operations.
+All functions from Python's `math` module are available under the `math.*` namespace, plus custom wrappers for `abs` and `mod`. Use `--list-functions` to see the full list.
+
+**Common math functions:** `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `log`, `log2`, `log10`, `exp`, `gcd`, `lcm`, `comb`, `perm`, `gamma`, `erf`, and more.
+
+The following have custom wrappers with enhanced behavior:
 
 #### `pow(base, exp)`
 Raise base to the power of exp.
@@ -200,8 +236,14 @@ def is_palindrome(n):
 
 ### Using Custom Functions
 
+Custom functions are available both unqualified and under the `user.*` namespace:
+
 ```bash
-python prime-square-sum.py --functions my_funcs.py --expr "does_exist square(n) == 666"
+# Both of these work:
+python prime-square-sum.py --functions my_funcs.py --expr "does_exist sum_of_digits(n) == 9"
+python prime-square-sum.py --functions my_funcs.py --expr "does_exist user.sum_of_digits(n) == 9"
+
+# Mix with builtins:
 python prime-square-sum.py --functions my_funcs.py --expr "does_exist is_palindrome(primesum(n,2)) == 1"
 ```
 
