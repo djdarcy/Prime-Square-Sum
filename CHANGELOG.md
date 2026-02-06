@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.10] - 2026-02-06
+
+### Added
+- **Unified `--list CATEGORY` command** (Issue #47)
+  - Consolidates `--list-functions`, `--list-equations`, `--list-algorithms`, `--show-config`
+  - `--list` bare shows available categories with counts
+  - `--list all` shows all categories (equations > functions > algorithms > config)
+  - Categories: `functions`, `equations`, `algorithms`, `config`, `all`
+- **`utils/list_commands.py`** — Extracted list handlers from prime-square-sum.py
+- **`scripts/gh_sub_issues.py`** — Tool for managing GitHub sub-issue relationships
+- 10 new CLI integration tests (571 total)
+
+### Changed
+- Removed `--list-functions`, `--list-equations`, `--list-algorithms`, `--show-config` flags
+- Cleaned up prime-square-sum.py imports (list/display logic moved to utils/list_commands.py)
+
+### Related Issues
+- Issue #47: Consolidate --list-* flags (parent)
+- Issue #48: Add --list CATEGORY unified flag
+- Issue #49: Deprecate old flags (removed instead — personal tool)
+- Issue #50: Update docs for --list syntax
+
 ## [0.7.9] - 2026-02-06
 
 ### Added

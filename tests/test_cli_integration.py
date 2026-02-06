@@ -52,8 +52,8 @@ class TestBasicCLI:
         assert "--lhs" in stdout
 
     def test_list_functions(self):
-        """--list-functions shows available functions."""
-        code, stdout, stderr = run_cli("--list-functions")
+        """--list functions shows available functions."""
+        code, stdout, stderr = run_cli("--list", "functions")
         assert code == 0
         assert "primesum" in stdout
         assert "tri" in stdout
@@ -64,6 +64,86 @@ class TestBasicCLI:
         code, stdout, stderr = run_cli()
         assert code != 0
         assert "required" in stderr.lower() or "error" in stderr.lower()
+
+
+# =============================================================================
+# --list Command Tests (Issue #47)
+# =============================================================================
+
+class TestListCommand:
+    """Test unified --list CATEGORY command."""
+
+    def test_list_bare_shows_menu(self):
+        """--list with no argument shows category menu."""
+        code, stdout, stderr = run_cli("--list")
+        assert code == 0
+        assert "Available categories" in stdout
+        assert "equations" in stdout
+        assert "functions" in stdout
+        assert "algorithms" in stdout
+        assert "config" in stdout
+
+    def test_list_functions(self):
+        """--list functions shows grouped functions."""
+        code, stdout, stderr = run_cli("--list", "functions")
+        assert code == 0
+        assert "[pss]" in stdout
+        assert "[math]" in stdout
+        assert "primesum" in stdout
+        assert "tri" in stdout
+
+    def test_list_equations(self):
+        """--list equations shows saved equations."""
+        code, stdout, stderr = run_cli("--list", "equations")
+        assert code == 0
+        assert "primesum-squared" in stdout
+        assert "Available functions:" in stdout  # compact summary
+
+    def test_list_algorithms(self):
+        """--list algorithms shows sieve variants."""
+        code, stdout, stderr = run_cli("--list", "algorithms")
+        assert code == 0
+        assert "Sieve Algorithms" in stdout
+        assert "auto" in stdout
+
+    def test_list_config(self):
+        """--list config shows effective configuration."""
+        code, stdout, stderr = run_cli("--list", "config")
+        assert code == 0
+        assert "Configuration" in stdout
+        assert "Default equation" in stdout
+
+    def test_list_all(self):
+        """--list all shows all categories."""
+        code, stdout, stderr = run_cli("--list", "all")
+        assert code == 0
+        # Should contain output from all categories
+        assert "primesum-squared" in stdout  # equations
+        assert "[pss]" in stdout             # functions
+        assert "Sieve Algorithms" in stdout  # algorithms
+        assert "Configuration" in stdout     # config
+
+    def test_list_invalid_category(self):
+        """--list with invalid category shows error."""
+        code, stdout, stderr = run_cli("--list", "bogus")
+        assert code != 0
+        assert "invalid choice" in stderr
+
+    def test_list_menu_shows_counts(self):
+        """--list menu shows counts for each category."""
+        code, stdout, stderr = run_cli("--list")
+        assert code == 0
+        assert "available)" in stdout or "total)" in stdout
+
+    def test_old_list_flags_removed(self):
+        """Old --list-* flags are no longer recognized."""
+        code, stdout, stderr = run_cli("--list-functions")
+        assert code == 2  # argparse error
+
+    def test_old_show_config_removed(self):
+        """Old --show-config flag is no longer recognized."""
+        code, stdout, stderr = run_cli("--show-config")
+        assert code == 2  # argparse error
 
 
 # =============================================================================

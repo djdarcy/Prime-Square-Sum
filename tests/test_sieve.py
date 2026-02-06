@@ -140,7 +140,13 @@ class TestIndividualSieve:
 
 
 class TestPythonSieveFacade:
-    """Test the _python_sieve facade/dispatcher."""
+    """Test the _python_sieve facade/dispatcher.
+
+    Note: These tests call _python_sieve() directly to exercise the Python
+    fallback algorithms (basic, segmented, individual). This triggers a
+    "primesieve not available" warning even when primesieve IS installed —
+    that warning is expected and confirms the fallback path is being tested.
+    """
 
     def test_python_sieve_auto_selection(self):
         """Test that auto-selection works correctly."""

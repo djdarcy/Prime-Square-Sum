@@ -1,12 +1,12 @@
 # Functions Reference
 
-Functions are the building blocks of expressions. Use `--list-functions` to see all available functions.
+Functions are the building blocks of expressions. Use `--list functions` to see all available functions.
 
 ## Quick Reference
 
 ```bash
 # List all functions with descriptions
-python prime-square-sum.py --list-functions
+python prime-square-sum.py --list functions
 
 # Load custom functions from a file
 python prime-square-sum.py --functions my_funcs.py --expr "does_exist my_func(n) == 666"
@@ -152,7 +152,7 @@ digital_root(12345) = 6   # 1+2+3+4+5 = 15, 1+5 = 6
 
 ### Math Functions (math)
 
-All functions from Python's `math` module are available under the `math.*` namespace, plus custom wrappers for `abs` and `mod`. Use `--list-functions` to see the full list.
+All functions from Python's `math` module are available under the `math.*` namespace, plus custom wrappers for `abs` and `mod`. Use `--list functions` to see the full list.
 
 **Common math functions:** `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `log`, `log2`, `log10`, `exp`, `gcd`, `lcm`, `comb`, `perm`, `gamma`, `erf`, and more.
 

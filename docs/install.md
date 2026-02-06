@@ -135,7 +135,7 @@ The Python fallback automatically selects an appropriate sieve algorithm based o
 - **Segmented sieve**: Same speed, bounded memory O(√n + segment)
 - **Individual testing**: Slowest, minimal memory
 
-Override with `--algorithm sieve:segmented` or `--prefer minimal`. See `--list-algorithms` for details.
+Override with `--algorithm sieve:segmented` or `--prefer minimal`. See `--list algorithms` for details.
 
 ## Mamba (Faster Conda Alternative)
 

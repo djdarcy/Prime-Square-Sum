@@ -19,8 +19,8 @@ Usage:
     # Verify known result (no iteration)
     python prime-square-sum.py --expr "verify primesum(7,2) == 666"
 
-    # List available functions
-    python prime-square-sum.py --list-functions
+    # List available functions, equations, or other resources
+    python prime-square-sum.py --list functions
 
 Author: D. Darcy
 Project: https://github.com/djdarcy/Prime-Square-Sum
@@ -52,18 +52,13 @@ from utils.cli import (
     build_iterator_factories_from_args,
     format_match,
     format_no_match,
-    # Issue #21: Equation loading
-    print_equations_list,
-    load_equations_file,
     # Issue #22: Configuration
     load_config,
-    show_config,
 )
+from utils.list_commands import handle_list
 from utils.sieve import (
     generate_n_primes, PRIMESIEVE_AVAILABLE,
-    get_available_algorithms, get_algorithm_info, configure as configure_sieve,
-    ALGORITHM_AUTO, ALGORITHM_PRIMESIEVE, ALGORITHM_BASIC,
-    ALGORITHM_SEGMENTED, ALGORITHM_INDIVIDUAL,
+    configure as configure_sieve,
 )
 from utils import gpu as gpu_utils
 
@@ -97,8 +92,10 @@ Examples:
   # Implicit verify (auto-detected when no free variables)
   %(prog)s --expr "primesum(7,2) == 666"
 
-  # List all available mathematical functions
-  %(prog)s --list-functions
+  # List available resources
+  %(prog)s --list functions
+  %(prog)s --list equations
+  %(prog)s --list                   # show available categories
 
 Quantifiers:
   does_exist  Find first match and stop (default)
@@ -148,20 +145,10 @@ Comparison operators: ==, !=, <, >, <=, >=
         help='Load saved equation by ID or name'
     )
     parser.add_argument(
-        '--list-equations',
-        action='store_true',
-        help='List available saved equations'
-    )
-    parser.add_argument(
         '--var',
         action='append',
         metavar='NAME=VALUE',
         help='Set equation parameter (e.g., --var a=3 or --var a=3,b=4)'
-    )
-    parser.add_argument(
-        '--show-config',
-        action='store_true',
-        help='Show effective configuration and default equation'
     )
 
     # === Variable Bounds ===
@@ -237,12 +224,16 @@ Comparison operators: ==, !=, <, >, <=, >=
         help='Show detailed progress and timing'
     )
 
-    # === Convenience Commands ===
+    # === List / Info Commands ===
+    _list_categories = ['functions', 'equations', 'algorithms', 'config', 'all']
     parser.add_argument(
-        '--list-functions',
-        action='store_true',
-        help='List all available mathematical functions'
+        '--list',
+        nargs='?',
+        const='menu',
+        metavar='{' + ','.join(_list_categories) + '}',
+        help='List available resources (functions, equations, algorithms, config, all)'
     )
+
 
     # === Function Loading ===
     parser.add_argument(
@@ -277,11 +268,6 @@ Comparison operators: ==, !=, <, >, <=, >=
         metavar='MB',
         help='Maximum memory usage in MB for sieve operations'
     )
-    parser.add_argument(
-        '--list-algorithms',
-        action='store_true',
-        help='List available algorithm variants'
-    )
 
     # === Version ===
     parser.add_argument(
@@ -294,87 +280,8 @@ Comparison operators: ==, !=, <, >, <=, >=
 
 
 # =============================================================================
-# Command Handlers
+# Expression Handler
 # =============================================================================
-
-def handle_list_functions(registry: FunctionRegistry) -> int:
-    """List all available functions grouped by namespace."""
-    signatures = registry.list_signatures()
-
-    # Group by namespace
-    groups: dict = {}
-    for name, description in signatures.items():
-        if '.' in name:
-            ns = name.split('.')[0]
-        else:
-            ns = "(other)"
-        groups.setdefault(ns, []).append(description)
-
-    print("\nAvailable Functions:")
-    print("=" * 60)
-
-    # Display in priority order: user > pss > math
-    namespace_order = ["user", "pss", "math"]
-    for ns in namespace_order:
-        if ns in groups:
-            print(f"\n  [{ns}]")
-            for desc in sorted(groups[ns]):
-                print(f"    {desc}")
-            del groups[ns]
-
-    # Any remaining namespaces
-    for ns, descs in sorted(groups.items()):
-        print(f"\n  [{ns}]")
-        for desc in sorted(descs):
-            print(f"    {desc}")
-
-    print()
-    print("=" * 60)
-    print(f"\nUnqualified names resolve by priority: user > pss > math")
-    print(f"Total: {len(registry)} functions")
-    return 0
-
-
-def handle_list_algorithms() -> int:
-    """List all available algorithm variants."""
-    print("\nAvailable Algorithm Variants:")
-    print("=" * 60)
-
-    info = get_algorithm_info()
-    available = get_available_algorithms()
-
-    # Group by class (currently only sieve)
-    print("\nSieve Algorithms (--algorithm sieve:<variant>):")
-    print("-" * 50)
-
-    for algo in [ALGORITHM_AUTO, ALGORITHM_PRIMESIEVE, ALGORITHM_BASIC,
-                 ALGORITHM_SEGMENTED, ALGORITHM_INDIVIDUAL]:
-        algo_info = info.get(algo, {})
-        status = "OK" if algo_info.get("available", False) else "NOT INSTALLED"
-        desc = algo_info.get("description", "")
-        time_c = algo_info.get("complexity_time", "")
-        space_c = algo_info.get("complexity_space", "")
-
-        print(f"  {algo:12} [{status}]")
-        print(f"               {desc}")
-        if time_c:
-            print(f"               Time: {time_c}, Space: {space_c}")
-        print()
-
-    print("Usage:")
-    print("  --algorithm sieve:auto        Auto-select best available")
-    print("  --algorithm sieve:segmented   Force segmented (bounded memory)")
-    print("  --algorithm sieve:basic       Force basic sieve")
-    print("  --algorithm sieve:individual  Force individual testing")
-    print()
-    print("Resource preferences (--prefer):")
-    print("  cpu      Prefer CPU-intensive algorithms")
-    print("  memory   Prefer faster algorithms even if memory-heavy")
-    print("  minimal  Prefer minimal memory usage")
-    print("  gpu      Prefer GPU acceleration where available")
-
-    return 0
-
 
 def handle_expression(args, registry: FunctionRegistry) -> int:
     """Handle expression evaluation."""
@@ -551,46 +458,15 @@ def main():
 
     # === Handle Special Modes ===
 
-    # List functions
-    if args.list_functions:
-        return handle_list_functions(registry)
-
-    # List algorithms (Issue #29)
-    if args.list_algorithms:
-        return handle_list_algorithms()
-
-    # Show config (Issue #22)
-    if args.show_config:
-        show_config()
-        return 0
-
-    # List equations (Issue #21)
-    if args.list_equations:
-        print_equations_list()
-        # Show compact function summary for discoverability
-        compact = registry.list_compact()
-        ns_order = ["user", "pss", "math"]
-        shown = [ns for ns in ns_order if ns in compact]
-        shown += [ns for ns in sorted(compact) if ns not in ns_order]
-        if shown:
-            print("\nAvailable functions:")
-            for ns in shown:
-                names = compact[ns]
-                line = ', '.join(names)
-                if len(line) > 100:
-                    # Truncate to fit, show count
-                    truncated = []
-                    length = 0
-                    for n in names:
-                        addition = len(n) + (2 if truncated else 0)  # ", " separator
-                        if length + addition > 65:
-                            break
-                        truncated.append(n)
-                        length += addition
-                    line = f"{', '.join(truncated)}, ... ({len(names)} total)"
-                print(f"  {ns}: {line}")
-            print("  Use --list-functions for details.")
-        return 0
+    # Unified --list dispatch (#47)
+    if args.list is not None:
+        valid = {'functions', 'equations', 'algorithms', 'config', 'all', 'menu'}
+        if args.list not in valid:
+            parser.error(
+                f"argument --list: invalid choice: '{args.list}' "
+                f"(choose from functions, equations, algorithms, config, all)"
+            )
+        return handle_list(args.list, args, registry)
 
     # === Main Expression Evaluation ===
 

@@ -30,11 +30,11 @@ stf(10) = 2² + 3² + 5² + 7² + 11² + 13² + 17² = 666
 
 What I find fascinating about this relationship is the resultant value 666 is a triangular number itself. So the question then is if we were able to sum the rows of a 666 element triangle with 36 rows in base-666 would the result _also_ be the sum of squared or cubed primes?
 
-This program attempts to provide an answer. The base-10 number from `stf(666)` unfortunately is massively large though at 98 digits:
+This program attempts to provide an answer. The base-10 number from `stf(666)` unfortunately though is massively large at 98 digits:
 
 `37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290`
 
-While `stf(b)` is a closed-form function, `primesum(n,p)` is computationally irreducible. This means there is no readily available formula to directly find which `n` satisfies `primesum(n,p) = stf(b)`. So, in the absence of a better method, we enumerate prime sums and check for matches. See [docs/rationale.md](docs/rationale.md) for additional details as to why this tool needs to be as versatile as it is.
+While `stf(b)` is a closed-form function, `primesum(n,p)` is computationally irreducible. This means there is no readily available formula to directly find which `n` satisfies `primesum(n,p) = stf(b)`. So, in the absence of a better method, we enumerate prime sums and check for matches. See [docs/rationale.md](docs/rationale.md) for additional details as to why this tool needs to be as flexible and versatile as it is.
 
 Due to the huge size of the 98-digits I've further adapted `prime-square-sum` to work with multiprocessing and CUDA (via CuPy) to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/main/paper%20and%20notes) for more details.
 
@@ -56,7 +56,7 @@ The `--target` flag searches against the **default expression** `primesum(n,2)` 
 python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 --max-m 50
 
 # List available functions
-python prime-square-sum.py --list-functions
+python prime-square-sum.py --list functions
 ```
 
 ### Verify Mode (v0.7.6+)
@@ -86,7 +86,7 @@ Control which sieve algorithm is used for prime generation:
 
 ```bash
 # List available algorithms
-python prime-square-sum.py --list-algorithms
+python prime-square-sum.py --list algorithms
 
 # Force segmented sieve (bounded memory)
 python prime-square-sum.py --target 666 --algorithm sieve:segmented

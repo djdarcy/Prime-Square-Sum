@@ -75,10 +75,10 @@ Use 'does_exist' or 'for_any' prefix, e.g.: does_exist primesum(n,2) == 666
 
 ### Functions
 
-Use `--list-functions` to see all available functions:
+Use `--list functions` to see all available functions:
 
 ```bash
-python prime-square-sum.py --list-functions
+python prime-square-sum.py --list functions
 ```
 
 Functions can be called with or without a namespace qualifier:

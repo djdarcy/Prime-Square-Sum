@@ -6,7 +6,7 @@ Save frequently-used expressions in `equations.json` for quick access.
 
 ```bash
 # List available equations
-python prime-square-sum.py --list-equations
+python prime-square-sum.py --list equations
 
 # Run an equation by name
 python prime-square-sum.py --equation primesum-squared
