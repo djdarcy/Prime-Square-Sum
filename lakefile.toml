@@ -15,4 +15,4 @@ rev = "v4.27.0"
 [[lean_lib]]
 name = "PrimeSquareSum"
 srcDir = "proofs"
-roots = ["TriSum", "PrimesumMod6", "FiveTwo", "Primes", "Core"]
+roots = ["Digits", "TriSum", "PrimesumMod6", "FiveTwo", "Primes", "Core"]

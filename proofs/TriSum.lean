@@ -13,7 +13,7 @@
   2. Recursive and inductive proofs (tri_succ, two_mul_tri)
   3. Triangular recognition correctness (tri_is_triangular)
   4. stf: sum of triangular digit rows (digitsToNat, qg, rowValue, stf)
-  5. Bounded recast pattern
+  5. Bounded recast pattern (uses recast from Digits.lean)
   6. Deep triangular structure
   7. Synthesis — composition theorems
 -/
@@ -21,6 +21,7 @@
 import Mathlib.Data.Nat.Sqrt
 import Mathlib.Tactic.Ring
 import Mathlib.Algebra.Ring.Parity
+import Digits
 
 -- ============================================================
 -- PART 1: Triangular Numbers
@@ -170,12 +171,17 @@ theorem row4_base10 : rowValue 10 4 = 123 := by native_decide
 theorem stf_ten : stf 10 = 666 := by native_decide
 
 -- ============================================================
--- PART 5: Bounded Recast Pattern & Deep Structure
+-- PART 5: Bounded Recast Pattern
 -- ============================================================
 
+-- recast, digitSum, digitCount, digitalRoot are defined in Digits.lean.
+-- This section applies recast to stf/tri — combining digit operations
+-- with the triangular number system.
+
 /--
-  THEOREM (Bounded): For n ∈ {2, 3, 4}, the recast of stf values (aka Trisum[Tri[n]])
-  to base-10 yields triangular numbers. The pattern breaks at n=5.
+  THEOREM (Bounded): For n ∈ {2, 3, 4}, the recast of stf(tri(n))
+  from base tri(n) to base 10 yields triangular numbers.
+  The pattern breaks at n=5.
 -/
 
 -- n=2: base=3,  stf=3,     recast=10   = tri(4)   OK
@@ -183,12 +189,23 @@ theorem stf_ten : stf 10 = 666 := by native_decide
 -- n=4: base=10, stf=666,   recast=666  = tri(36)  OK
 -- n=5: base=15, stf=24605, recast=7455 = NOT triangular
 
-theorem recast_n2_triangular : isTriangular 10 = true := by native_decide
-theorem recast_n3_triangular : isTriangular 55 = true := by native_decide
-theorem recast_n4_triangular : isTriangular 666 = true := by native_decide
-theorem recast_n5_NOT_triangular : isTriangular 7455 = false := by native_decide
+-- Concrete recast computations
+theorem recast_stf_n2 : recast (tri 2) 10 (stf (tri 2)) = 10 := by native_decide
+theorem recast_stf_n3 : recast (tri 3) 10 (stf (tri 3)) = 55 := by native_decide
+theorem recast_stf_n4 : recast (tri 4) 10 (stf (tri 4)) = 666 := by native_decide
+theorem recast_stf_n5 : recast (tri 5) 10 (stf (tri 5)) = 7455 := by native_decide
 
--- COROLLARY: The pattern breaks at n=5, suggesting base-10 (= 2x5)
+-- Triangularity of recast values
+theorem recast_n2_triangular : isTriangular (recast (tri 2) 10 (stf (tri 2))) = true := by
+  native_decide
+theorem recast_n3_triangular : isTriangular (recast (tri 3) 10 (stf (tri 3))) = true := by
+  native_decide
+theorem recast_n4_triangular : isTriangular (recast (tri 4) 10 (stf (tri 4))) = true := by
+  native_decide
+theorem recast_n5_NOT_triangular : isTriangular (recast (tri 5) 10 (stf (tri 5))) = false := by
+  native_decide
+
+-- COROLLARY: The pattern breaks at n=5, suggesting base-10 (= tri(4))
 -- is a structural boundary.
 
 -- ============================================================
@@ -278,16 +295,23 @@ theorem deep_tri_n4_triangular : isTriangular (tri (tri 8)) = true :=
      ((((G₀ ⊕ G₁) ⊕ G₀) ⊕ G₁) ⊕ G₀) = G₀
      producing 5 states from 2 constants
 
-  6. The bounded TriSum-Recast theorem:
+  6. Digit operations (see Digits.lean):
+     recast — reinterpret digits from one base to another
+     recast_self — round-trip identity
+     digitSum, digitCount, digitalRoot — digit meta-properties
+     digitSum_mod — general casting-out theorem
+
+  7. Bounded TriSum-Recast theorem (combines recast with stf/tri):
+     recast_stf_n{2,3,4,5} — concrete recast computations
      Recast values are triangular for n ∈ {2, 3, 4}
      Pattern breaks at n = 5
 
-  7. Deep structure:
+  8. Deep structure:
      Tri[Tri[4]] = 55 (n=3 case)
      Tri[Tri[8]] = 666 (n=4 case)
 
   Open for future work:
-  - Full TriSum definition and closed-form proof
-  - Why the pattern breaks at n=5
+  - Closed-form Q(b,z) polynomial and equivalence with rowValue
+  - Why the recast pattern breaks at n=5
   - Connection to φ = (1 + √5)/2
 -/

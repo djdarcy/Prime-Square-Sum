@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.15] - 2026-02-07
+
+### Added
+- **New proof file: `Digits.lean`** — general digit operations module
+  - `recast(source_base, target_base, x)` using Mathlib's `Nat.digits` + `Nat.ofDigits`
+  - Both are little-endian, so the composition is direct with no list reversal
+  - Fully encapsulates the Mathematica `Recast` function — the Mathematica version
+    routes through string representation (`CustomIntegerString`, `CustomFromDigits`,
+    `digitList`) to support display of arbitrary bases including a 666-symbol alphabet
+    (digits, Latin, Greek, Hebrew, Cyrillic, Hiragana, Katakana, CJK). Our Lean
+    definition works on numeric digit values directly, so the character-mapping
+    layer is unnecessary. Full Mathematica source documented in Digits.lean.
+  - `recast_self` — round-trip identity: `recast b b x = x`
+  - `digitSum` — sum of digits in base b (wraps `Nat.digits`)
+  - `digitCount` — number of digits in base b
+  - `digitalRoot` — O(1) formula `1 + ((n-1) % (b-1))` for arbitrary bases
+  - `digitSum_mod` — general casting-out theorem: `n ≡ digitSum b n [MOD (b-1)]`
+  - Concrete verifications: `digitSum 10 666 = 18`, `digitCount 10 666 = 3`,
+    `digitalRoot 10 666 = 9`, `digitCount 666 665 = 1` (compression point)
+- **TriSum.lean refactored** — digit operations moved to Digits.lean
+  - Bounded recast theorems (`recast_stf_n{2,3,4,5}`) remain in TriSum.lean
+    since they combine recast with stf/tri
+  - Upgraded triangularity theorems now use `recast` expressions instead of
+    hardcoded values (10, 55, 666, 7455)
+- 3 thinking scripts documenting sympy analysis of tf numerator factoring:
+  - tf(b,z) numerator factors as `2*(b-1)^2 * Q(b,z)` where Q is a pure polynomial
+  - Q(b,z) coefficient patterns and recursive relations identified
+  - Verified Q = rowValue across bases {3, 6, 10, 15, 45}
+
+### Design Documents
+- `2026-02-07__13-23-27__DISCUSS_Rnd{1-4}_*_phase3-lean-tf-recast-strategy.md` — 3-round Gem discuss + independent assessment
+- `2026-02-07__15-27-09__dev-workflow_lean-digit-meta-formalizations.md` — analysis for digit meta additions
+
 ## [0.7.13] - 2026-02-07
 
 ### Added
