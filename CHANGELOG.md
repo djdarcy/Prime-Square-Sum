@@ -7,30 +7,48 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **Lean 4 + Mathlib v4.27.0 infrastructure**
   - `lakefile.toml`, `lean-toolchain`, `lake-manifest.json` at repo root
-  - Proof files in `proofs/` — each as its own Lean library (`TriSum`, `PrimesumMod6`)
+  - Unified library (`PrimeSquareSum`) with 5 proof modules
   - `.gitignore` updated for `.lake/` build artifacts
+- **Core identity proved: stf(10) = primesum(7, 2) = 666**
+  - `stf_eq_primesum_7_2` — machine-verified identity linking triangular digit sums to squared primes
+  - `core_pattern` — the full chain: tri(4) = primesum(3,1), stf(tri(4)) = primesum(7,2), result is triangular
 - **`tri_is_triangular` proved** — last `sorry` eliminated, all proofs fully machine-verified
   - Uses `Nat.sqrt`, `Nat.even_mul_succ_self`, `ring` to show `isTriangular(tri(n)) = true` for all n
   - Proves the discriminant `1 + 8·tri(n) = (2n+1)²` is always a perfect square
-- **New theorems in TriSum.lean** (Part 8 synthesis section)
+- **New theorems in TriSum.lean** (Part 7 synthesis section)
   - `tri_zero` — base case: tri(0) = 0
   - `two_mul_tri` — division-free formula: 2·tri(n) = n·(n+1), proved by induction
   - `tri_tri_is_triangular` — composition: tri(tri(n)) is always triangular
   - `tri_plus_succ_is_triangular` — chaining: tri(n)+(n+1) is triangular
   - `deep_tri_n3_triangular` — 55 is triangular via tri(tri(4)), not computation
   - `deep_tri_n4_triangular` — 666 is triangular via tri(tri(8)), not computation
+- **stf function merged into TriSum.lean** — algorithmic definitions for the digit-row sum
+  - `digitsToNat`, `qg`, `rowValue`, `stf` definitions
+  - `stf_ten` — stf(10) = 666 (via `native_decide`)
+  - Bounded recast pattern verification for n ∈ {2, 3, 4}; breaks at n = 5
+- **New proof file: `FiveTwo.lean`** — XOR cycle / 5-and-2 pattern
+  - Self-contained (no Mathlib imports, pure Boolean logic)
+  - `xor_cycle_returns`, `cycle_states`, `base_ten_factorization`
+- **New proof file: `Primes.lean`** — prime list and primesum
+  - `firstSevenPrimes`, `primesum` definitions
+  - Individual primality proofs (`prime_2` through `prime_17`)
+  - `primesum_7_2` = 666, `primesum_3_1` = 10
+- **New proof file: `Core.lean`** — connecting theorems
+  - `stf_eq_primesum_7_2`, `stf_ten_is_triangular`, `chain_tri4_to_tri36`, `core_pattern`
 - **New proof file: `PrimesumMod6.lean`**
   - primesum(n,2) ≡ (n+5) mod 6 for all n ≥ 3
   - Algebraic core: (6k+1)² % 6 = 1 and (6k+5)² % 6 = 1 (ring + omega)
   - Bounded verification for n = 3..7
 - **Conjecture 5** (stf-k² pattern) added to `paper and notes/conjectures.md`
 - **`utils/pascal_systems.py`** — Pascal-weighted number system analytical tools
-- 8 verification/thinking scripts in `tests/one-offs/thinking/`
+- 12 verification/thinking scripts in `tests/one-offs/thinking/`
 
 ### Technical Notes
+- Unified library structure: single `[[lean_lib]]` with `roots` array enables cross-module imports
 - Proof dependency chain: tri_zero → tri_succ → two_mul_tri → tri_is_triangular → tri_tri_is_triangular
+- Core.lean imports TriSum + Primes + PrimesumMod6 to prove the connecting identity
 - Structural proofs for 55 and 666 avoid `native_decide` by composing general theorems
-- Gem consulted for proof strategy; API names verified against Mathlib source
+- Gem consulted for proof strategy and project organization; API names verified against Mathlib source
 
 ### Design Documents
 - `2026-02-06__16-16-09__full-postmortem_tri-is-triangular-proof-and-synthesis.md`

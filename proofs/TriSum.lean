@@ -1,11 +1,21 @@
 /-
-  TriSum and Triangular Number Proofs
-  ====================================
+  TriSum.lean — Triangular Numbers and the stf Function
+  ======================================================
 
   Basic Lean 4 formalizations for concepts from
   "Zero_AG to The Scarcity Framework: A Guide" by D. Darcy
 
-  This file demonstrates how to build up proofs from definitions.
+  Formalizations for the triangular number system and its
+  digit-arrangement sum function (stf/trisum).
+
+  Structure:
+  1. Triangular number definitions and properties (tri, isTriangular)
+  2. Recursive and inductive proofs (tri_succ, two_mul_tri)
+  3. Triangular recognition correctness (tri_is_triangular)
+  4. stf: sum of triangular digit rows (digitsToNat, qg, rowValue, stf)
+  5. Bounded recast pattern
+  6. Deep triangular structure
+  7. Synthesis — composition theorems
 -/
 
 import Mathlib.Data.Nat.Sqrt
@@ -45,6 +55,10 @@ theorem tri_four : tri 4 = 10 := by native_decide
 /-- Lemma: tri(36) = 666 -/
 theorem tri_thirtysix : tri 36 = 666 := by native_decide
 
+-- ============================================================
+-- PART 2: Recursive & Inductive Properties
+-- ============================================================
+
 /--
   The recursive property: tri(n+1) = tri(n) + (n+1)
 
@@ -73,7 +87,7 @@ theorem two_mul_tri (n : Nat) : 2 * tri n = n * (n + 1) := by
     ring
 
 -- ============================================================
--- PART 2: Checking if a number is triangular
+-- PART 3: Checking if a number is triangular
 -- ============================================================
 
 /--
@@ -115,117 +129,59 @@ theorem tri_is_triangular (n : Nat) : isTriangular (tri n) = true := by
   simp [Nat.pow_two]
 
 -- ============================================================
--- PART 3: The 5-State XOR Cycle
+-- PART 4: The stf Function (Sum of Triangular Digit Rows)
+-- ============================================================
+
+/-- Interpret a list of digits as a base-b number (big-endian).
+    e.g., digitsToNat 10 [4, 5, 6] = 456 -/
+def digitsToNat (b : Nat) (digits : List Nat) : Nat :=
+  digits.foldl (fun acc d => acc * b + d) 0
+
+/-- Inverse triangular: find r such that tri(r) = b.
+    For triangular b, returns the unique r with r*(r+1)/2 = b. -/
+def qg (b : Nat) : Nat :=
+  (Nat.sqrt (1 + 8 * b) - 1) / 2
+
+/-- Row z from top: z consecutive digits starting at (b - tri(z)).
+    For base 10: row 1 = [9], row 2 = [7,8], row 3 = [4,5,6], row 4 = [0,1,2,3] -/
+def rowValue (b z : Nat) : Nat :=
+  let start := b - tri z
+  digitsToNat b ((List.range z).map (· + start))
+
+/-- stf(b): sum of all triangular row values for base b.
+    Arranges digits 0..b-1 into a triangle of qg(b) rows and sums the
+    base-b interpretation of each row. -/
+def stf (b : Nat) : Nat :=
+  let r := qg b
+  (List.range r).foldl (fun acc i => acc + rowValue b (i + 1)) 0
+
+-- qg correctness on known triangular numbers
+theorem qg_three : qg 3 = 2 := by native_decide
+theorem qg_six : qg 6 = 3 := by native_decide
+theorem qg_ten : qg 10 = 4 := by native_decide
+
+-- Individual row values for base 10
+theorem row1_base10 : rowValue 10 1 = 9 := by native_decide
+theorem row2_base10 : rowValue 10 2 = 78 := by native_decide
+theorem row3_base10 : rowValue 10 3 = 456 := by native_decide
+theorem row4_base10 : rowValue 10 4 = 123 := by native_decide
+
+-- The core computation: stf(10) = 666
+theorem stf_ten : stf 10 = 666 := by native_decide
+
+-- ============================================================
+-- PART 5: Bounded Recast Pattern & Deep Structure
 -- ============================================================
 
 /--
-  Logical states as 4-tuples representing truth tables.
-  For two variables P, Q, the tuple represents [PQ=TT, PQ=TF, PQ=FT, PQ=FF]
--/
-structure LogicState where
-  tt : Bool  -- P=T, Q=T
-  tf : Bool  -- P=T, Q=F
-  ft : Bool  -- P=F, Q=T
-  ff : Bool  -- P=F, Q=F
-deriving Repr, DecidableEq
-
-/-- G₀: Biconditional (P ↔ Q) = {T, F, F, T} -/
-def G0 : LogicState := ⟨true, false, false, true⟩
-
-/-- G₁: XOR (P ⊕ Q) = {F, T, T, F} -/
-def G1 : LogicState := ⟨false, true, true, false⟩
-
-/-- E: Tautology = {T, T, T, T} -/
-def E : LogicState := ⟨true, true, true, true⟩
-
-/-- F: Contradiction = {F, F, F, F} -/
-def F : LogicState := ⟨false, false, false, false⟩
-
-/-- XOR operation on logic states (component-wise) -/
-def LogicState.xor (a b : LogicState) : LogicState :=
-  ⟨Bool.xor a.tt b.tt, Bool.xor a.tf b.tf, Bool.xor a.ft b.ft, Bool.xor a.ff b.ff⟩
-
-instance : HXor LogicState LogicState LogicState where
-  hXor := LogicState.xor
-
--- ============================================================
--- PART 4: Proving the 5-State Cycle
--- ============================================================
-
-/-- Step 0: Start with G₀ -/
-def step0 : LogicState := G0
-
-/-- Step 1: G₀ ⊕ G₁ = E (tautology) -/
-def step1 : LogicState := G0 ^^^ G1
-
-theorem step1_is_E : step1 = E := by native_decide
-
-/-- Step 2: E ⊕ G₀ = G₁ -/
-def step2 : LogicState := step1 ^^^ G0
-
-theorem step2_is_G1 : step2 = G1 := by native_decide
-
-/-- Step 3: G₁ ⊕ G₁ = F (contradiction) -/
-def step3 : LogicState := step2 ^^^ G1
-
-theorem step3_is_F : step3 = F := by native_decide
-
-/-- Step 4: F ⊕ G₀ = G₀ (back to start!) -/
-def step4 : LogicState := step3 ^^^ G0
-
-theorem step4_is_G0 : step4 = G0 := by native_decide
-
-/--
-  THEOREM: The complete cycle returns to G₀
-
-  ((((G₀ ⊕ G₁) ⊕ G₀) ⊕ G₁) ⊕ G₀) = G₀
-
-  This proves the 5-state cycle: G₀ → E → G₁ → F → G₀
--/
-theorem xor_cycle_returns : (((G0 ^^^ G1) ^^^ G0) ^^^ G1) ^^^ G0 = G0 := by
-  native_decide
-
-/-- The cycle visits exactly these 5 states -/
-theorem cycle_states :
-  [G0, G0 ^^^ G1, (G0 ^^^ G1) ^^^ G0, ((G0 ^^^ G1) ^^^ G0) ^^^ G1,
-   (((G0 ^^^ G1) ^^^ G0) ^^^ G1) ^^^ G0] = [G0, E, G1, F, G0] := by
-  native_decide
-
--- ============================================================
--- PART 5: The 5-and-2 Pattern
--- ============================================================
-
-/--
-  The number of distinct states in the cycle (before returning to start).
-  We have: G₀, E, G₁, F = 4 distinct states
-  But the SEQUENCE has 5 positions: G₀ → E → G₁ → F → G₀
--/
-def cycleLength : Nat := 5
-def distinctStates : Nat := 4
-def numConstants : Nat := 2  -- G₀ and G₁
-
-/-- Base 10 = 2 × 5 -/
-theorem base_ten_factorization : 10 = 2 * 5 := by native_decide
-
-/-- tri(4) = 10, connecting triangular numbers to base-10 -/
-theorem tri_four_is_ten : tri 4 = 10 := by native_decide
-
--- ============================================================
--- PART 6: TriSum Pattern (Bounded Theorem)
--- ============================================================
-
-/--
-  THEOREM (Bounded): For n ∈ {2, 3, 4}, the recast of TriSum[Tri[n]]
-  to base-10 yields a triangular number.
-
-  This is verified computationally; formal proof requires TriSum definition.
+  THEOREM (Bounded): For n ∈ {2, 3, 4}, the recast of stf values (aka Trisum[Tri[n]])
+  to base-10 yields triangular numbers. The pattern breaks at n=5.
 -/
 
--- The key values from our Python verification:
--- n=2: base=3,  TriSum=3,     Recast=10   = Tri[4]   ✓
--- n=3: base=6,  TriSum=35,    Recast=55   = Tri[10]  ✓
--- n=4: base=10, TriSum=666,   Recast=666  = Tri[36]  ✓
--- n=5: base=15, TriSum=24605, Recast=7455 = NOT triangular
+-- n=2: base=3,  stf=3,     recast=10   = tri(4)   OK
+-- n=3: base=6,  stf=35,    recast=55   = tri(10)  OK
+-- n=4: base=10, stf=666,   recast=666  = tri(36)  OK
+-- n=5: base=15, stf=24605, recast=7455 = NOT triangular
 
 theorem recast_n2_triangular : isTriangular 10 = true := by native_decide
 theorem recast_n3_triangular : isTriangular 55 = true := by native_decide
@@ -236,13 +192,12 @@ theorem recast_n5_NOT_triangular : isTriangular 7455 = false := by native_decide
 -- is a structural boundary.
 
 -- ============================================================
--- PART 7: Deep Triangular Structure
+-- PART 6: Deep Triangular Structure
 -- ============================================================
-
-/-- For n=3: Recast = 55 = Tri[10] = Tri[Tri[4]] -/
+/-- For n=3: Recast = 55 = tri(10) = tri(tri(4)) -/
 theorem deep_structure_n3 : tri (tri 4) = 55 := by native_decide
 
-/-- For n=4: Recast = 666 = Tri[36] = Tri[Tri[8]] -/
+/-- For n=4: Recast = 666 = tri(36) = tri(tri(8)) -/
 theorem deep_structure_n4 : tri (tri 8) = 666 := by native_decide
 
 -- Observation: The index doubles from 4 to 8 as we go from n=3 to n=4.
@@ -251,7 +206,7 @@ theorem deep_structure_n4 : tri (tri 8) = 666 := by native_decide
 -- This transition occurs exactly at base-10.
 
 -- ============================================================
--- PART 8: Synthesis — How the Pieces Fit Together
+-- PART 7: Synthesis — How the Pieces Fit Together
 -- ============================================================
 
 /-
@@ -319,7 +274,7 @@ theorem deep_tri_n4_triangular : isTriangular (tri (tri 8)) = true :=
      deep_tri_n3_triangular — 55 is triangular because 55 = tri(tri(4))
      deep_tri_n4_triangular — 666 is triangular because 666 = tri(tri(8))
 
-  5. The XOR cycle theorem:
+  5. The XOR cycle theorem (see FiveTwo.lean):
      ((((G₀ ⊕ G₁) ⊕ G₀) ⊕ G₁) ⊕ G₀) = G₀
      producing 5 states from 2 constants
 

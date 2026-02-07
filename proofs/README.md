@@ -5,7 +5,7 @@ This folder contains formal mathematical proofs related to the Prime-Square-Sum 
 ## Files
 
 ### TriSum.lean
-Lean 4 formalization of triangular number properties and the XOR cycle theorem.
+Triangular number theory and the stf (trisum) function.
 
 **Key theorems proven:**
 
@@ -17,15 +17,19 @@ Lean 4 formalization of triangular number properties and the XOR cycle theorem.
 *Correctness bridge:*
 - `tri_is_triangular` — For all n, isTriangular(tri(n)) = true. Proves the discriminant 1+8·tri(n) = (2n+1)² is always a perfect square.
 
-*Composition and chaining (Part 8 synthesis):*
+*The stf function (sum of triangular digit rows):*
+- `digitsToNat` — Interpret a digit list as a base-b number (big-endian)
+- `qg` — Inverse triangular number
+- `rowValue` — Value of row z in the triangular digit arrangement
+- `stf` — Sum of all triangular row values for base b
+- `stf_ten` — **stf(10) = 666** (via `native_decide`)
+- `qg_ten`, `row1_base10`..`row4_base10` — Concrete verifications
+
+*Composition and chaining (synthesis):*
 - `tri_tri_is_triangular` — tri(tri(n)) is always triangular (composition)
 - `tri_plus_succ_is_triangular` — tri(n)+(n+1) is triangular (chains tri_succ + tri_is_triangular)
 - `deep_tri_n3_triangular` — 55 is triangular because 55 = tri(tri(4)), proved structurally
 - `deep_tri_n4_triangular` — 666 is triangular because 666 = tri(tri(8)), proved structurally
-
-*XOR cycle:*
-- `xor_cycle_returns` — The G₀ ⊕ G₁ cycle returns to G₀ after 5 states
-- `cycle_states` — Proves the cycle visits exactly [G₀, E, G₁, F, G₀]
 
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
@@ -44,7 +48,37 @@ tri_zero (base case) → tri_succ (recursion) → two_mul_tri (induction)
 - Mathlib (see setup instructions below)
 - Run with: `lake build` from the repo root
 
-### primesum_mod6.lean
+### FiveTwo.lean
+The 5-and-2 pattern — XOR cycle theorem (self-contained, no Mathlib imports).
+
+**Key theorems proven:**
+- `xor_cycle_returns` — The G₀ ⊕ G₁ cycle returns to G₀ after 5 states
+- `cycle_states` — Proves the cycle visits exactly [G₀, E, G₁, F, G₀]
+- `base_ten_factorization` — 10 = 2 × 5
+
+### Primes.lean
+Prime list and primesum function.
+
+**Definitions:**
+- `firstSevenPrimes` — [2, 3, 5, 7, 11, 13, 17]
+- `primesum` — Sum of p^power for each prime in a list
+
+**Key theorems proven:**
+- `prime_2` through `prime_17` — Individual primality proofs (via `native_decide`)
+- `primesum_7_2` — **primesum([2,3,5,7,11,13,17], 2) = 666**
+- `primesum_3_1` — primesum([2,3,5], 1) = 10
+
+### Core.lean
+Connecting theorems tying stf to primesum.
+
+**Key theorems proven:**
+- `stf_eq_primesum_7_2` — **stf(10) = primesum(7, 2)** (the core identity)
+- `stf_ten_is_triangular` — stf(10) is a triangular number
+- `chain_tri4_to_tri36` — tri(4) = 10 ∧ stf(10) = 666 ∧ 666 = tri(36)
+- `core_pattern` — The full chain: tri(4) = primesum(3,1), stf(tri(4)) = primesum(7,2), and that result is triangular
+- `ten_eq_primesum_3_1` — 10 = primesum(3, 1)
+
+### PrimesumMod6.lean
 Formal proof that primesum(n, 2) ≡ (n + 5) (mod 6) for all n ≥ 3.
 
 **Key theorems proven:**

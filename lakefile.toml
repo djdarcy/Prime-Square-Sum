@@ -1,7 +1,7 @@
 name = "PrimeSquareSum"
 version = "0.1.0"
 keywords = ["math"]
-defaultTargets = ["TriSum", "PrimesumMod6"]
+defaultTargets = ["PrimeSquareSum"]
 
 [leanOptions]
 pp.unicode.fun = true       # pretty-prints `fun a ↦ b`
@@ -13,9 +13,6 @@ scope = "leanprover-community"
 rev = "v4.27.0"
 
 [[lean_lib]]
-name = "TriSum"
+name = "PrimeSquareSum"
 srcDir = "proofs"
-
-[[lean_lib]]
-name = "PrimesumMod6"
-srcDir = "proofs"
+roots = ["TriSum", "PrimesumMod6", "FiveTwo", "Primes", "Core"]
