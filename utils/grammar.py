@@ -26,7 +26,7 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Union
 
-from lark import Lark, Transformer
+from lark import Lark, Token, Transformer
 from lark.visitors import v_args
 from lark.exceptions import UnexpectedInput, UnexpectedCharacters, UnexpectedToken
 
@@ -65,10 +65,13 @@ class FunctionCall(ASTNode):
 
 @dataclass
 class Comparison(ASTNode):
-    """A comparison between two terms."""
-    left: ASTNode
-    operator: str  # ==, !=, <, >, <=, >=
-    right: ASTNode
+    """A comparison (possibly chained) between terms.
+
+    Single:  Comparison(operands=[a, b], operators=["=="])
+    Chained: Comparison(operands=[a, b, c], operators=["<", "<"])
+    """
+    operands: List[ASTNode]
+    operators: List[str]  # ==, !=, <, >, <=, >=
 
 
 @dataclass
@@ -87,10 +90,20 @@ class UnaryOp(ASTNode):
 
 
 @dataclass
+class ContextBlock(ASTNode):
+    """A context block that changes operator interpretation.
+
+    Contexts: "num" (default/math), "bit" (bitwise), "bool" (boolean/logical).
+    """
+    context: str    # "num", "bit", or "bool"
+    body: ASTNode
+
+
+@dataclass
 class Expression(ASTNode):
-    """A complete expression with quantifier and comparison."""
+    """A complete expression with quantifier and body."""
     quantifier: Optional[str]  # "for_any", "does_exist", "verify", or None (auto-detect)
-    comparison: Comparison
+    body: ASTNode
 
 
 # =============================================================================
@@ -98,24 +111,63 @@ class Expression(ASTNode):
 # =============================================================================
 
 GRAMMAR = r"""
-    start: [quantifier] comparison
+    start: [quantifier] body
 
     quantifier: "for_any" -> for_any
               | "does_exist" -> does_exist
               | "verify" -> verify
 
-    comparison: term COMP_OP term
+    // Precedence hierarchy (lowest → highest binding):
+    //   1.  or, ||                     (logical OR, left-assoc)
+    //   2.  and, &&                    (logical AND, left-assoc)
+    //   3.  not, !                     (logical NOT, unary prefix)
+    //   4.  ==, !=, <, >, <=, >=      (comparison, chainable)
+    //   5.  bor, |                     (bitwise OR, left-assoc)
+    //   6.  xor                        (bitwise XOR, left-assoc)
+    //   7.  band, &                    (bitwise AND, left-assoc)
+    //   8.  shl/<<, shr/>>            (bit shifts, left-assoc)
+    //   9.  +, -                       (addition, left-assoc)
+    //  10.  *, /, //, %               (multiplication, left-assoc)
+    //  11.  -x, +x, ~, bnot          (unary prefix)
+    //  12.  **, ^                      (exponentiation, right-assoc)
+    //  13.  atoms, context blocks     (terminals)
+
+    ?body: or_expr
+
+    ?or_expr: and_expr
+            | or_expr "or" and_expr     -> lor
+            | or_expr "||" and_expr     -> lor
+
+    ?and_expr: not_expr
+             | and_expr "and" not_expr  -> land
+             | and_expr "&&" not_expr   -> land
+
+    ?not_expr: comparison
+             | "not" not_expr           -> lnot
+             | "!" not_expr             -> lnot
+
+    ?comparison: bitor_expr (COMP_OP bitor_expr)*
 
     COMP_OP: "==" | "!=" | "<=" | ">=" | "<" | ">"
+    SHL_OP.2: "<<"
+    SHR_OP.2: ">>"
 
-    // Arithmetic precedence hierarchy (lowest to highest):
-    //   1. +, - (additive, left-associative)
-    //   2. *, /, //, % (multiplicative, left-associative)
-    //   3. ** (exponentiation, right-associative)
-    //   4. unary -, + (prefix)
-    //   5. atoms: literals, variables, function calls, (expr)
+    ?bitor_expr: bitxor_expr
+               | bitor_expr "bor" bitxor_expr   -> bitor
+               | bitor_expr "|" bitxor_expr     -> bitor
 
-    ?term: add_expr
+    ?bitxor_expr: bitand_expr
+                | bitxor_expr "xor" bitand_expr -> bitxor
+
+    ?bitand_expr: shift_expr
+                | bitand_expr "band" shift_expr -> bitand
+                | bitand_expr "&" shift_expr    -> bitand
+
+    ?shift_expr: add_expr
+               | shift_expr "shl" add_expr      -> shl
+               | shift_expr SHL_OP add_expr     -> shl
+               | shift_expr "shr" add_expr      -> shr
+               | shift_expr SHR_OP add_expr     -> shr
 
     ?add_expr: mul_expr
              | add_expr "+" mul_expr   -> add
@@ -130,17 +182,25 @@ GRAMMAR = r"""
     ?unary_expr: power_expr
                | "-" unary_expr    -> neg
                | "+" unary_expr    -> pos
+               | "~" unary_expr    -> bitnot
+               | "bnot" unary_expr -> bitnot
 
     ?power_expr: atom
                | atom "**" unary_expr  -> power
+               | atom "^" unary_expr   -> power
 
     ?atom: function_call
+         | context_block
          | literal
          | variable
-         | "(" term ")"
+         | "(" body ")"
 
     function_call: NAME "(" [args] ")"
-    args: term ("," term)*
+    args: body ("," body)*
+
+    context_block: "num" "[" body "]"   -> ctx_num
+                 | "bit" "[" body "]"   -> ctx_bit
+                 | "bool" "[" body "]"  -> ctx_bool
 
     literal: NUMBER
     variable: NAME
@@ -163,12 +223,12 @@ class ASTTransformer(Transformer):
 
     def start(self, *args) -> Expression:
         if len(args) == 2:
-            quantifier, comparison = args
+            quantifier, body = args
         else:
             # No quantifier specified - will be auto-detected in find_matches
-            comparison = args[0]
+            body = args[0]
             quantifier = None
-        return Expression(quantifier=quantifier, comparison=comparison)
+        return Expression(quantifier=quantifier, body=body)
 
     def for_any(self) -> str:
         return "for_any"
@@ -179,8 +239,33 @@ class ASTTransformer(Transformer):
     def verify(self) -> str:
         return "verify"
 
-    def comparison(self, left: ASTNode, op, right: ASTNode) -> Comparison:
-        return Comparison(left=left, operator=str(op), right=right)
+    def comparison(self, *args) -> Comparison:
+        # args = [operand1, op1, operand2, op2, operand3, ...]
+        operands = [args[i] for i in range(0, len(args), 2)]
+        operators = [str(args[i]) for i in range(1, len(args), 2)]
+        return Comparison(operands=operands, operators=operators)
+
+    # Boolean operators -> BinaryOp / UnaryOp
+    def lor(self, left, right):      return BinaryOp(left, 'or', right)
+    def land(self, left, right):     return BinaryOp(left, 'and', right)
+    def lnot(self, operand):         return UnaryOp('not', operand)
+
+    # Bitwise operators -> BinaryOp / UnaryOp
+    def bitor(self, left, right):    return BinaryOp(left, 'bor', right)
+    def bitxor(self, left, right):   return BinaryOp(left, 'xor', right)
+    def bitand(self, left, right):   return BinaryOp(left, 'band', right)
+    def shl(self, *args):
+        nodes = [a for a in args if not isinstance(a, Token)]
+        return BinaryOp(nodes[0], 'shl', nodes[1])
+    def shr(self, *args):
+        nodes = [a for a in args if not isinstance(a, Token)]
+        return BinaryOp(nodes[0], 'shr', nodes[1])
+    def bitnot(self, operand):       return UnaryOp('~', operand)
+
+    # Context blocks -> ContextBlock
+    def ctx_num(self, body):         return ContextBlock('num', body)
+    def ctx_bit(self, body):         return ContextBlock('bit', body)
+    def ctx_bool(self, body):        return ContextBlock('bool', body)
 
     # Arithmetic operators -> BinaryOp
     def add(self, left, right):      return BinaryOp(left, '+', right)
@@ -336,10 +421,12 @@ def _walk_validate(node: ASTNode, registry: FunctionRegistry, errors: List[str])
     elif isinstance(node, UnaryOp):
         _walk_validate(node.operand, registry, errors)
     elif isinstance(node, Comparison):
-        _walk_validate(node.left, registry, errors)
-        _walk_validate(node.right, registry, errors)
+        for operand in node.operands:
+            _walk_validate(operand, registry, errors)
+    elif isinstance(node, ContextBlock):
+        _walk_validate(node.body, registry, errors)
     elif isinstance(node, Expression):
-        _walk_validate(node.comparison, registry, errors)
+        _walk_validate(node.body, registry, errors)
 
 
 # =============================================================================
@@ -370,9 +457,14 @@ def find_free_variables(node: ASTNode) -> Set[str]:
     elif isinstance(node, UnaryOp):
         return find_free_variables(node.operand)
     elif isinstance(node, Comparison):
-        return find_free_variables(node.left) | find_free_variables(node.right)
+        result: Set[str] = set()
+        for operand in node.operands:
+            result |= find_free_variables(operand)
+        return result
+    elif isinstance(node, ContextBlock):
+        return find_free_variables(node.body)
     elif isinstance(node, Expression):
-        return find_free_variables(node.comparison)
+        return find_free_variables(node.body)
     return set()
 
 
@@ -392,7 +484,7 @@ class ExpressionEvaluator:
     Example:
         registry = FunctionRegistry()
         evaluator = ExpressionEvaluator(registry)
-        result = evaluator.evaluate(ast.comparison, {'n': 7})
+        result = evaluator.evaluate(ast.body, {'n': 7})
     """
 
     def __init__(self, registry: FunctionRegistry):
@@ -435,6 +527,25 @@ class ExpressionEvaluator:
                 )
 
         elif isinstance(node, BinaryOp):
+            # Short-circuit: and/or must not eagerly evaluate both sides
+            if node.operator in ('and', 'or'):
+                ctx = getattr(self, '_eval_context', 'num')
+                if ctx == 'bit':
+                    # Bitwise: eager evaluate, integer ops
+                    left = self.evaluate(node.left, context)
+                    right = self.evaluate(node.right, context)
+                    if node.operator == 'and':
+                        return op_module.and_(int(left), int(right))
+                    else:
+                        return op_module.or_(int(left), int(right))
+                else:
+                    # Logical: short-circuit
+                    left = self.evaluate(node.left, context)
+                    if node.operator == 'and':
+                        return self.evaluate(node.right, context) if left else left
+                    else:  # or
+                        return left if left else self.evaluate(node.right, context)
+            # Normal eager evaluation for all other operators
             left = self.evaluate(node.left, context)
             right = self.evaluate(node.right, context)
             return self._binary_op(left, node.operator, right)
@@ -444,17 +555,33 @@ class ExpressionEvaluator:
             return self._unary_op(node.operator, operand)
 
         elif isinstance(node, Comparison):
-            left = self.evaluate(node.left, context)
-            right = self.evaluate(node.right, context)
-            return self._compare(left, node.operator, right)
+            # Chained comparisons: a op1 b op2 c → (a op1 b) and (b op2 c)
+            # Each operand evaluated exactly once
+            values = [self.evaluate(node.operands[0], context)]
+            for i, op in enumerate(node.operators):
+                next_val = self.evaluate(node.operands[i + 1], context)
+                if not self._compare(values[-1], op, next_val):
+                    return False
+                values.append(next_val)
+            return True
+
+        elif isinstance(node, ContextBlock):
+            old_context = getattr(self, '_eval_context', 'num')
+            self._eval_context = node.context
+            try:
+                result = self.evaluate(node.body, context)
+            finally:
+                self._eval_context = old_context
+            return result
 
         elif isinstance(node, Expression):
-            return self.evaluate(node.comparison, context)
+            return self.evaluate(node.body, context)
 
         else:
             raise EvaluationError(f"Unknown AST node type: {type(node).__name__}")
 
     _BINARY_OPS = {
+        # Arithmetic
         '+': op_module.add,
         '-': op_module.sub,
         '*': op_module.mul,
@@ -462,15 +589,36 @@ class ExpressionEvaluator:
         '//': op_module.floordiv,
         '%': op_module.mod,
         '**': op_module.pow,
+        # Bitwise
+        'bor': op_module.or_,
+        'xor': op_module.xor,
+        'band': op_module.and_,
+        'shl': op_module.lshift,
+        'shr': op_module.rshift,
     }
 
     _UNARY_OPS = {
         '-': op_module.neg,
         '+': op_module.pos,
+        '~': op_module.invert,
+        'not': lambda x: not x,
     }
 
     def _binary_op(self, left: Any, op: str, right: Any) -> Any:
-        """Perform a binary arithmetic operation."""
+        """Perform a binary operation (arithmetic or bitwise)."""
+        # Context-dependent: ^ means power in num/default, XOR in bit
+        if op == '**':
+            ctx = getattr(self, '_eval_context', 'num')
+            if ctx == 'bit':
+                return op_module.xor(int(left), int(right))
+            else:
+                if op in ('/', '//', '%') and right == 0:
+                    raise EvaluationError(f"Division by zero: {left} {op} {right}")
+                try:
+                    return op_module.pow(left, right)
+                except (OverflowError, ValueError) as e:
+                    raise EvaluationError(f"Arithmetic error: {left} {op} {right} -- {e}")
+
         if op in ('/', '//', '%') and right == 0:
             raise EvaluationError(f"Division by zero: {left} {op} {right}")
         try:
@@ -480,6 +628,13 @@ class ExpressionEvaluator:
 
     def _unary_op(self, op: str, operand: Any) -> Any:
         """Perform a unary operation."""
+        # Context-dependent: not means logical NOT in num/default, bitwise NOT in bit
+        if op == 'not':
+            ctx = getattr(self, '_eval_context', 'num')
+            if ctx == 'bit':
+                return op_module.invert(int(operand))
+            else:
+                return not operand
         return self._UNARY_OPS[op](operand)
 
     def _compare(self, left: Any, op: str, right: Any) -> bool:
@@ -564,7 +719,7 @@ def find_matches(
         if free_vars:
             raise ValueError(
                 f"Expression has free variables ({', '.join(sorted(free_vars))}) but no quantifier. "
-                f"Use 'does_exist' or 'for_any' prefix, e.g.: does_exist {expr.comparison}"
+                f"Use 'does_exist' or 'for_any' prefix, e.g.: does_exist {expr.body}"
             )
         # No free vars and no quantifier -> implicit verify mode
         quantifier = "verify"
@@ -577,7 +732,7 @@ def find_matches(
                 f"but found: {', '.join(sorted(free_vars))}"
             )
         # Evaluate and yield result
-        result = evaluator.evaluate(expr.comparison, {})
+        result = evaluator.evaluate(expr.body, {})
         yield {"__verify_result__": bool(result)}
         return
 
@@ -598,7 +753,7 @@ def find_matches(
 
     # Handle no-variable case for does_exist/for_any (e.g., "does_exist tri(4) == 10")
     if not free_vars:
-        if evaluator.evaluate(expr.comparison, {}):
+        if evaluator.evaluate(expr.body, {}):
             yield {}
         return
 
@@ -624,7 +779,7 @@ def find_matches(
     for values in itertools.product(*ranges):
         context = dict(zip(var_list, values))
         try:
-            if evaluator.evaluate(expr.comparison, context):
+            if evaluator.evaluate(expr.body, context):
                 yield context.copy()
                 if quantifier == "does_exist":
                     return  # Stop at first match
@@ -671,4 +826,4 @@ def verify_expression(
             f"verify_expression requires closed formula, "
             f"but found free variables: {', '.join(sorted(free_vars))}"
         )
-    return bool(evaluator.evaluate(expr.comparison, {}))
+    return bool(evaluator.evaluate(expr.body, {}))

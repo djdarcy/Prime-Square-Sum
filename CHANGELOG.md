@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.14] - 2026-02-07
+
+### Added
+- **Boolean operators in expressions** (Issue #44 Phase 3a)
+  - `and` / `&&` — logical AND with short-circuit evaluation
+  - `or` / `||` — logical OR with short-circuit evaluation
+  - `not` / `!` — logical NOT (unary prefix)
+  - Short-circuit: `0 and 1/0` does not raise, `1 or 1/0` does not raise
+- **Bitwise operators in expressions**
+  - Keyword operators: `xor`, `band`, `bor`, `bnot`, `shl`, `shr`
+  - Symbolic operators: `&`, `|`, `~`, `<<`, `>>`
+  - Compound functions: `nand(a,b)`, `nor(a,b)`, `xnor(a,b)` registered in `pss` namespace
+- **`^` as power alias** — `2^3 == 8` (math convention, same as `**`)
+- **Chained comparisons** — `1 < x < 10` evaluates as `(1 < x) and (x < 10)` with middle operand evaluated once
+- **Context blocks** for operator disambiguation (Phase 3a infrastructure)
+  - `num[expr]` — numeric context (default, no-op)
+  - `bit[expr]` — bitwise context: `^` becomes XOR, `and`/`or`/`not` become bitwise
+  - `bool[expr]` — explicit boolean context
+  - `ContextBlock` AST node with context-aware evaluation
+- 67 new tests (717 total, 243 grammar tests) — zero regressions
+
+### Changed
+- `Comparison` dataclass: `(left, operator, right)` → `(operands: List, operators: List)` for chained comparisons
+- `Expression.comparison` field renamed to `Expression.body` (body can be any AST node, not just Comparison)
+- Grammar expanded from 5 to 13 precedence levels matching Python's operator hierarchy
+- `ExpressionEvaluator` handles short-circuit logic for `and`/`or` before dispatch
+
+### Technical Notes
+- 13-level precedence (lowest → highest): `or/||` → `and/&&` → `not/!` → comparison → `bor/|` → `xor` → `band/&` → `shl/shr` → `+/-` → `*/÷` → unary → `**/^` → atoms
+- `SHL_OP`/`SHR_OP` terminals use Lark priority `.2` to prevent `<<`/`>>` tokenization conflict with `<`/`>` comparison operators
+- `and`/`or` inside `bit[...]` context become bitwise AND/OR (eager, not short-circuit)
+- `not` inside `bit[...]` context becomes bitwise NOT (`~`)
+- `^` inside `bit[...]` context becomes XOR instead of power
+- Reserved words added: `and`, `or`, `not`, `xor`, `band`, `bor`, `bnot`, `shl`, `shr`, `num`, `bit`, `bool`
+- Longer variable names containing keywords still work: `android`, `notable`, `boolean` (longest match wins)
+- num→bool conversion uses strict positive: `>0 = true, <=0 = false`
+
+### Related Issues
+- Issue #44: Extend expression grammar (Phase 3a complete)
+- Issue #13: Generalized Expression Grammar (epic)
+
+### Design Documents
+- `2026-02-07__04-32-12__full-postmortem_phase2-complete-and-phase3-design.md`
+
 ## [0.7.12] - 2026-02-07
 
 ### Added

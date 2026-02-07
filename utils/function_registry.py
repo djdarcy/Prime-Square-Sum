@@ -239,9 +239,27 @@ class FunctionRegistry:
             self._unqualified_owners[name] = [namespace]
 
     def _register_builtins(self) -> None:
-        """Register built-in functions under math.* and pss.* namespaces."""
+        """Register built-in functions under math.*, pss.*, and bitwise namespaces."""
         self._register_pss_builtins()
         self._register_math_builtins()
+        self._register_bitwise_builtins()
+
+    def _register_bitwise_builtins(self) -> None:
+        """Register bitwise compound functions (nand, nor, xnor)."""
+        def nand(a: int, b: int) -> int:
+            """Bitwise NAND: ~(a & b)"""
+            return ~(int(a) & int(b))
+
+        def nor(a: int, b: int) -> int:
+            """Bitwise NOR: ~(a | b)"""
+            return ~(int(a) | int(b))
+
+        def xnor(a: int, b: int) -> int:
+            """Bitwise XNOR: ~(a ^ b)"""
+            return ~(int(a) ^ int(b))
+
+        for name, func in [("nand", nand), ("nor", nor), ("xnor", xnor)]:
+            self._register_namespaced(name, func, namespace="pss", source="builtin")
 
     def _register_pss_builtins(self) -> None:
         """Register Prime-Square-Sum specific functions under pss.* namespace."""

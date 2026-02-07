@@ -12,6 +12,7 @@ from utils.grammar import (
     Variable,
     FunctionCall,
     Comparison,
+    ContextBlock,
     Expression,
     BinaryOp,
     UnaryOp,
@@ -71,43 +72,39 @@ class TestASTClasses:
     def test_comparison(self):
         """Comparison holds left, operator, and right."""
         comp = Comparison(
-            left=Literal(1),
-            operator="==",
-            right=Literal(1)
+            operands=[Literal(1), Literal(1)],
+            operators=["=="]
         )
-        assert comp.left == Literal(1)
-        assert comp.operator == "=="
-        assert comp.right == Literal(1)
+        assert comp.operands[0] == Literal(1)
+        assert comp.operators[0] == "=="
+        assert comp.operands[1] == Literal(1)
 
     def test_expression(self):
         """Expression holds quantifier and comparison."""
         expr = Expression(
             quantifier="does_exist",
-            comparison=Comparison(
-                left=Literal(1),
-                operator="==",
-                right=Literal(1)
+            body=Comparison(
+                operands=[Literal(1), Literal(1)],
+                operators=["=="]
             )
         )
         assert expr.quantifier == "does_exist"
-        assert isinstance(expr.comparison, Comparison)
+        assert isinstance(expr.body, Comparison)
 
     def test_ast_equality(self):
         """AST nodes with same values are equal (dataclass behavior)."""
         ast1 = Expression(
             quantifier="does_exist",
-            comparison=Comparison(
-                left=FunctionCall("primesum", [Variable("n"), Literal(2)]),
-                operator="==",
-                right=Literal(666)
+            body=Comparison(
+                operands=[FunctionCall("primesum", [Variable("n"), Literal(2)]), Literal(666)],
+                operators=["=="]
             )
         )
         ast2 = Expression(
             quantifier="does_exist",
-            comparison=Comparison(
-                left=FunctionCall("primesum", [Variable("n"), Literal(2)]),
-                operator="==",
-                right=Literal(666)
+            body=Comparison(
+                operands=[FunctionCall("primesum", [Variable("n"), Literal(2)]), Literal(666)],
+                operators=["=="]
             )
         )
         assert ast1 == ast2
@@ -130,10 +127,9 @@ class TestExpressionParser:
 
         assert ast == Expression(
             quantifier="does_exist",
-            comparison=Comparison(
-                left=FunctionCall("primesum", [Variable("n"), Literal(2)]),
-                operator="==",
-                right=Literal(666)
+            body=Comparison(
+                operands=[FunctionCall("primesum", [Variable("n"), Literal(2)]), Literal(666)],
+                operators=["=="]
             )
         )
 
@@ -142,15 +138,15 @@ class TestExpressionParser:
         ast = parser.parse("for_any tri(n) == 666")
 
         assert ast.quantifier == "for_any"
-        assert isinstance(ast.comparison.left, FunctionCall)
-        assert ast.comparison.left.name == "tri"
+        assert isinstance(ast.body.operands[0], FunctionCall)
+        assert ast.body.operands[0].name == "tri"
 
     def test_parse_nested_function(self, parser):
         """Parse nested function calls."""
         ast = parser.parse("does_exist tri(n) == trisum(qtri(666))")
 
         # RHS is trisum(qtri(666))
-        rhs = ast.comparison.right
+        rhs = ast.body.operands[1]
         assert isinstance(rhs, FunctionCall)
         assert rhs.name == "trisum"
         assert len(rhs.args) == 1
@@ -165,34 +161,34 @@ class TestExpressionParser:
         ast = parser.parse("for_any primesum(n,2) == tri(m)")
 
         # LHS has variable n
-        assert ast.comparison.left == FunctionCall(
+        assert ast.body.operands[0] == FunctionCall(
             "primesum", [Variable("n"), Literal(2)]
         )
         # RHS has variable m
-        assert ast.comparison.right == FunctionCall("tri", [Variable("m")])
+        assert ast.body.operands[1] == FunctionCall("tri", [Variable("m")])
 
     def test_parse_all_comparison_operators(self, parser):
         """Parse all comparison operators."""
         operators = ["==", "!=", "<", ">", "<=", ">="]
         for op in operators:
             ast = parser.parse(f"does_exist tri(n) {op} 100")
-            assert ast.comparison.operator == op
+            assert ast.body.operators[0] == op
 
     def test_parse_float_literal(self, parser):
         """Parse float literals."""
         ast = parser.parse("does_exist tri(n) == 3.14")
-        assert ast.comparison.right == Literal(3.14)
+        assert ast.body.operands[1] == Literal(3.14)
 
     def test_parse_zero_arg_function(self, parser):
         """Parse function call with no arguments."""
         ast = parser.parse("does_exist foo() == 1")
-        assert ast.comparison.left == FunctionCall("foo", [])
+        assert ast.body.operands[0] == FunctionCall("foo", [])
 
     def test_parse_variable_on_right(self, parser):
         """Parse variable on right side of comparison."""
         ast = parser.parse("does_exist 666 == primesum(n,2)")
-        assert ast.comparison.left == Literal(666)
-        assert isinstance(ast.comparison.right, FunctionCall)
+        assert ast.body.operands[0] == Literal(666)
+        assert isinstance(ast.body.operands[1], FunctionCall)
 
     def test_parse_whitespace_handling(self, parser):
         """Parser handles various whitespace."""
@@ -203,7 +199,7 @@ class TestExpressionParser:
     def test_parse_underscore_in_names(self, parser):
         """Parser allows underscores in function/variable names."""
         ast = parser.parse("does_exist my_func(my_var) == 1")
-        assert ast.comparison.left == FunctionCall("my_func", [Variable("my_var")])
+        assert ast.body.operands[0] == FunctionCall("my_func", [Variable("my_var")])
 
 
 class TestParseErrors:
@@ -225,17 +221,22 @@ class TestParseErrors:
         # because we support implicit verify mode for closed formulas
         ast = parser.parse("primesum(n,2) == 666")
         assert ast.quantifier is None  # No quantifier specified
-        assert ast.comparison.right == Literal(666)
+        assert ast.body.operands[1] == Literal(666)
 
     def test_invalid_quantifier(self, parser):
         """Invalid quantifier raises ParseError."""
         with pytest.raises(ParseError):
             parser.parse("find_all primesum(n,2) == 666")
 
-    def test_missing_comparison(self, parser):
-        """Missing comparison raises ParseError."""
-        with pytest.raises(ParseError):
-            parser.parse("does_exist primesum(n,2)")
+    def test_bare_expression_is_valid(self, parser):
+        """Expression without comparison is valid (body can be any expression).
+
+        With Phase 3 grammar, a bare function call like 'primesum(n,2)' is
+        parseable — it evaluates to the function's return value.
+        """
+        ast = parser.parse("does_exist primesum(n,2)")
+        assert ast.quantifier == "does_exist"
+        assert isinstance(ast.body, FunctionCall)
 
     def test_invalid_operator(self, parser):
         """Invalid operator raises ParseError."""
@@ -289,9 +290,8 @@ class TestFreeVariables:
     def test_comparison_two_variables(self):
         """Both sides of comparison are searched."""
         comp = Comparison(
-            left=FunctionCall("primesum", [Variable("n"), Literal(2)]),
-            operator="==",
-            right=FunctionCall("tri", [Variable("m")])
+            operands=[FunctionCall("primesum", [Variable("n"), Literal(2)]), FunctionCall("tri", [Variable("m")])],
+            operators=["=="]
         )
         assert find_free_variables(comp) == {"n", "m"}
 
@@ -299,10 +299,9 @@ class TestFreeVariables:
         """find_free_variables works on Expression."""
         expr = Expression(
             quantifier="for_any",
-            comparison=Comparison(
-                left=Variable("x"),
-                operator="==",
-                right=Variable("y")
+            body=Comparison(
+                operands=[Variable("x"), Variable("y")],
+                operators=["=="]
             )
         )
         assert find_free_variables(expr) == {"x", "y"}
@@ -310,9 +309,8 @@ class TestFreeVariables:
     def test_repeated_variable(self):
         """Same variable appearing twice is counted once."""
         comp = Comparison(
-            left=Variable("n"),
-            operator="==",
-            right=FunctionCall("tri", [Variable("n")])
+            operands=[Variable("n"), FunctionCall("tri", [Variable("n")])],
+            operators=["=="]
         )
         assert find_free_variables(comp) == {"n"}
 
@@ -373,12 +371,12 @@ class TestExpressionEvaluator:
 
     def test_evaluate_comparison_true(self, evaluator):
         """Evaluate comparison returning True."""
-        comp = Comparison(left=Literal(1), operator="==", right=Literal(1))
+        comp = Comparison(operands=[Literal(1), Literal(1)], operators=["=="])
         assert evaluator.evaluate(comp, {}) is True
 
     def test_evaluate_comparison_false(self, evaluator):
         """Evaluate comparison returning False."""
-        comp = Comparison(left=Literal(1), operator="==", right=Literal(2))
+        comp = Comparison(operands=[Literal(1), Literal(2)], operators=["=="])
         assert evaluator.evaluate(comp, {}) is False
 
     def test_evaluate_all_comparison_operators(self, evaluator):
@@ -400,17 +398,16 @@ class TestExpressionEvaluator:
             (">=", 5, 6, False),
         ]
         for op, left, right, expected in cases:
-            comp = Comparison(left=Literal(left), operator=op, right=Literal(right))
+            comp = Comparison(operands=[Literal(left), Literal(right)], operators=[op])
             assert evaluator.evaluate(comp, {}) is expected, f"{left} {op} {right}"
 
     def test_evaluate_expression_true(self, evaluator):
         """Evaluate full expression returning True."""
         expr = Expression(
             quantifier="does_exist",
-            comparison=Comparison(
-                left=FunctionCall("primesum", [Literal(7), Literal(2)]),
-                operator="==",
-                right=Literal(666)
+            body=Comparison(
+                operands=[FunctionCall("primesum", [Literal(7), Literal(2)]), Literal(666)],
+                operators=["=="]
             )
         )
         assert evaluator.evaluate(expr, {}) is True
@@ -627,14 +624,14 @@ class TestVerifyQuantifier:
         """Parse explicit verify quantifier."""
         ast = parser.parse("verify primesum(7,2) == 666")
         assert ast.quantifier == "verify"
-        assert ast.comparison.left == FunctionCall("primesum", [Literal(7), Literal(2)])
-        assert ast.comparison.right == Literal(666)
+        assert ast.body.operands[0] == FunctionCall("primesum", [Literal(7), Literal(2)])
+        assert ast.body.operands[1] == Literal(666)
 
     def test_parse_implicit_verify_no_vars(self, parser):
         """Parse expression with no quantifier and no free vars."""
         ast = parser.parse("primesum(7,2) == 666")
         assert ast.quantifier is None  # Will be auto-detected
-        assert ast.comparison.left == FunctionCall("primesum", [Literal(7), Literal(2)])
+        assert ast.body.operands[0] == FunctionCall("primesum", [Literal(7), Literal(2)])
 
     def test_parse_implicit_verify_nested_functions(self, parser):
         """Parse nested functions with no free vars."""
@@ -926,39 +923,39 @@ class TestDottedNames:
     def test_parse_math_namespace(self, parser):
         """Parse math.pow(n, 2) == 25."""
         ast = parser.parse("does_exist math.pow(n, 2) == 25")
-        assert ast.comparison.left == FunctionCall("math.pow", [Variable("n"), Literal(2)])
+        assert ast.body.operands[0] == FunctionCall("math.pow", [Variable("n"), Literal(2)])
 
     def test_parse_pss_namespace(self, parser):
         """Parse pss.tri(n) == 666."""
         ast = parser.parse("does_exist pss.tri(n) == 666")
-        assert ast.comparison.left == FunctionCall("pss.tri", [Variable("n")])
+        assert ast.body.operands[0] == FunctionCall("pss.tri", [Variable("n")])
 
     def test_parse_user_namespace(self, parser):
         """Parse user.custom(n) == 42."""
         ast = parser.parse("does_exist user.custom(n) == 42")
-        assert ast.comparison.left == FunctionCall("user.custom", [Variable("n")])
+        assert ast.body.operands[0] == FunctionCall("user.custom", [Variable("n")])
 
     def test_parse_unqualified_still_works(self, parser):
         """Unqualified names still parse correctly."""
         ast = parser.parse("does_exist primesum(n, 2) == 666")
-        assert ast.comparison.left == FunctionCall("primesum", [Variable("n"), Literal(2)])
+        assert ast.body.operands[0] == FunctionCall("primesum", [Variable("n"), Literal(2)])
 
     def test_parse_mixed_qualified_unqualified(self, parser):
         """Mix of qualified and unqualified in same expression."""
         ast = parser.parse("does_exist math.pow(n, 2) == pss.tri(m)")
-        assert ast.comparison.left == FunctionCall("math.pow", [Variable("n"), Literal(2)])
-        assert ast.comparison.right == FunctionCall("pss.tri", [Variable("m")])
+        assert ast.body.operands[0] == FunctionCall("math.pow", [Variable("n"), Literal(2)])
+        assert ast.body.operands[1] == FunctionCall("pss.tri", [Variable("m")])
 
     def test_parse_float_not_confused(self, parser):
         """Float literal 2.5 is not confused with a dotted name."""
         ast = parser.parse("does_exist math.pow(n, 2.5) == 100")
-        assert ast.comparison.left.args[1] == Literal(2.5)
-        assert ast.comparison.left.name == "math.pow"
+        assert ast.body.operands[0].args[1] == Literal(2.5)
+        assert ast.body.operands[0].name == "math.pow"
 
     def test_parse_nested_dotted(self, parser):
         """Nested dotted function calls."""
         ast = parser.parse("does_exist pss.tri(pss.qtri(666)) == 666")
-        outer = ast.comparison.left
+        outer = ast.body.operands[0]
         assert outer.name == "pss.tri"
         inner = outer.args[0]
         assert inner.name == "pss.qtri"
@@ -1057,7 +1054,7 @@ class TestArithmeticParsing:
 
     def test_parse_addition(self, parser):
         expr = parser.parse("verify 2 + 3 == 5")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, BinaryOp)
         assert left.operator == '+'
         assert left.left == Literal(2)
@@ -1065,53 +1062,53 @@ class TestArithmeticParsing:
 
     def test_parse_subtraction(self, parser):
         expr = parser.parse("verify 10 - 4 == 6")
-        assert isinstance(expr.comparison.left, BinaryOp)
-        assert expr.comparison.left.operator == '-'
+        assert isinstance(expr.body.operands[0], BinaryOp)
+        assert expr.body.operands[0].operator == '-'
 
     def test_parse_multiplication(self, parser):
         expr = parser.parse("verify 3 * 7 == 21")
-        assert isinstance(expr.comparison.left, BinaryOp)
-        assert expr.comparison.left.operator == '*'
+        assert isinstance(expr.body.operands[0], BinaryOp)
+        assert expr.body.operands[0].operator == '*'
 
     def test_parse_division(self, parser):
         expr = parser.parse("verify 7 / 2 == 3.5")
-        assert isinstance(expr.comparison.left, BinaryOp)
-        assert expr.comparison.left.operator == '/'
+        assert isinstance(expr.body.operands[0], BinaryOp)
+        assert expr.body.operands[0].operator == '/'
 
     def test_parse_floor_division(self, parser):
         expr = parser.parse("verify 7 // 2 == 3")
-        assert isinstance(expr.comparison.left, BinaryOp)
-        assert expr.comparison.left.operator == '//'
+        assert isinstance(expr.body.operands[0], BinaryOp)
+        assert expr.body.operands[0].operator == '//'
 
     def test_parse_modulo(self, parser):
         expr = parser.parse("verify 7 % 3 == 1")
-        assert isinstance(expr.comparison.left, BinaryOp)
-        assert expr.comparison.left.operator == '%'
+        assert isinstance(expr.body.operands[0], BinaryOp)
+        assert expr.body.operands[0].operator == '%'
 
     def test_parse_exponentiation(self, parser):
         expr = parser.parse("verify 2 ** 10 == 1024")
-        assert isinstance(expr.comparison.left, BinaryOp)
-        assert expr.comparison.left.operator == '**'
+        assert isinstance(expr.body.operands[0], BinaryOp)
+        assert expr.body.operands[0].operator == '**'
 
     # --- Unary operators ---
 
     def test_parse_unary_minus(self, parser):
         expr = parser.parse("verify -5 == -5")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, UnaryOp)
         assert left.operator == '-'
         assert left.operand == Literal(5)
 
     def test_parse_unary_plus(self, parser):
         expr = parser.parse("verify +5 == 5")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, UnaryOp)
         assert left.operator == '+'
 
     def test_parse_double_negative(self, parser):
         """--3 parses as neg(neg(3))."""
         expr = parser.parse("verify --3 == 3")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, UnaryOp)
         assert isinstance(left.operand, UnaryOp)
         assert left.operand.operand == Literal(3)
@@ -1121,7 +1118,7 @@ class TestArithmeticParsing:
     def test_precedence_mul_over_add(self, parser):
         """2 + 3 * 4 should parse as 2 + (3 * 4), not (2 + 3) * 4."""
         expr = parser.parse("verify 2 + 3 * 4 == 14")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, BinaryOp)
         assert left.operator == '+'
         assert left.left == Literal(2)
@@ -1131,7 +1128,7 @@ class TestArithmeticParsing:
     def test_precedence_parens_override(self, parser):
         """(2 + 3) * 4 should parse as mul(add(2,3), 4)."""
         expr = parser.parse("verify (2 + 3) * 4 == 20")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, BinaryOp)
         assert left.operator == '*'
         assert isinstance(left.left, BinaryOp)
@@ -1140,7 +1137,7 @@ class TestArithmeticParsing:
     def test_precedence_power_over_mul(self, parser):
         """2 * 3 ** 2 should parse as 2 * (3 ** 2)."""
         expr = parser.parse("verify 2 * 3 ** 2 == 18")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert left.operator == '*'
         assert isinstance(left.right, BinaryOp)
         assert left.right.operator == '**'
@@ -1148,7 +1145,7 @@ class TestArithmeticParsing:
     def test_precedence_unary_minus_and_power(self, parser):
         """-3**2 should parse as -(3**2), not (-3)**2. Python convention."""
         expr = parser.parse("verify -3**2 == -9")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, UnaryOp)
         assert left.operator == '-'
         assert isinstance(left.operand, BinaryOp)
@@ -1159,7 +1156,7 @@ class TestArithmeticParsing:
     def test_right_associativity_power(self, parser):
         """2**3**2 should parse as 2**(3**2), not (2**3)**2."""
         expr = parser.parse("verify 2**3**2 == 512")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert left.operator == '**'
         assert left.left == Literal(2)
         assert isinstance(left.right, BinaryOp)
@@ -1169,7 +1166,7 @@ class TestArithmeticParsing:
     def test_left_associativity_subtraction(self, parser):
         """10 - 3 - 2 should parse as (10 - 3) - 2."""
         expr = parser.parse("verify 10 - 3 - 2 == 5")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert left.operator == '-'
         assert isinstance(left.left, BinaryOp)
         assert left.left.operator == '-'
@@ -1179,7 +1176,7 @@ class TestArithmeticParsing:
     def test_nested_parens(self, parser):
         expr = parser.parse("verify ((2 + 3)) == 5")
         # Should still evaluate correctly
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, BinaryOp)
         assert left.operator == '+'
 
@@ -1188,7 +1185,7 @@ class TestArithmeticParsing:
     def test_arithmetic_with_function(self, parser):
         """tri(4) + 1 should parse as add(FunctionCall, Literal)."""
         expr = parser.parse("verify tri(4) + 1 == 11")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, BinaryOp)
         assert left.operator == '+'
         assert isinstance(left.left, FunctionCall)
@@ -1197,7 +1194,7 @@ class TestArithmeticParsing:
     def test_arithmetic_in_function_args(self, parser):
         """Functions can take arithmetic expressions as arguments."""
         expr = parser.parse("verify pow(2 + 1, 2) == 9")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, FunctionCall)
         assert isinstance(left.args[0], BinaryOp)
         assert left.args[0].operator == '+'
@@ -1205,13 +1202,13 @@ class TestArithmeticParsing:
     def test_arithmetic_both_sides(self, parser):
         """Arithmetic on both sides of comparison."""
         expr = parser.parse("verify 2 + 3 == 10 - 5")
-        assert isinstance(expr.comparison.left, BinaryOp)
-        assert isinstance(expr.comparison.right, BinaryOp)
+        assert isinstance(expr.body.operands[0], BinaryOp)
+        assert isinstance(expr.body.operands[1], BinaryOp)
 
     def test_power_unary_right(self, parser):
         """2**-3 should parse as power(2, neg(3))."""
         expr = parser.parse("verify 2**-3 == 0.125")
-        left = expr.comparison.left
+        left = expr.body.operands[0]
         assert isinstance(left, BinaryOp)
         assert left.operator == '**'
         assert isinstance(left.right, UnaryOp)
@@ -1240,7 +1237,7 @@ class TestArithmeticEvaluation:
     def _verify(self, parser, evaluator, expr_str):
         """Helper: parse and evaluate a verify expression, return comparison result."""
         ast = parser.parse(expr_str)
-        return evaluator.evaluate(ast.comparison, {})
+        return evaluator.evaluate(ast.body, {})
 
     # --- Basic operations ---
 
@@ -1321,17 +1318,17 @@ class TestArithmeticEvaluation:
     def test_division_by_zero(self, parser, evaluator):
         ast = parser.parse("verify 1 / 0 == 0")
         with pytest.raises(EvaluationError, match="Division by zero"):
-            evaluator.evaluate(ast.comparison, {})
+            evaluator.evaluate(ast.body, {})
 
     def test_floor_division_by_zero(self, parser, evaluator):
         ast = parser.parse("verify 1 // 0 == 0")
         with pytest.raises(EvaluationError, match="Division by zero"):
-            evaluator.evaluate(ast.comparison, {})
+            evaluator.evaluate(ast.body, {})
 
     def test_modulo_by_zero(self, parser, evaluator):
         ast = parser.parse("verify 1 % 0 == 0")
         with pytest.raises(EvaluationError, match="Division by zero"):
-            evaluator.evaluate(ast.comparison, {})
+            evaluator.evaluate(ast.body, {})
 
     def test_large_exponent(self, parser, evaluator):
         """Large exponents produce correct results (Python arbitrary precision)."""
@@ -1341,7 +1338,7 @@ class TestArithmeticEvaluation:
         """Float exponentiation overflow raises EvaluationError."""
         ast = parser.parse("verify 2.0 ** 10000 == 0")
         with pytest.raises(EvaluationError, match="Arithmetic error"):
-            evaluator.evaluate(ast.comparison, {})
+            evaluator.evaluate(ast.body, {})
 
     def test_unary_plus_minus(self, parser, evaluator):
         """+-3 parses as pos(neg(3)) = -3."""
@@ -1583,3 +1580,545 @@ class TestValidation:
         errors = validate_expression(expr, registry)
         assert len(errors) == 1
         assert "fake.nope" in errors[0]
+
+
+# =============================================================================
+# Phase 3: Boolean Operator Tests
+# =============================================================================
+
+class TestBooleanAST:
+    """Test boolean operator AST construction."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    def test_and_keyword(self, parser):
+        """'and' produces BinaryOp with operator 'and'."""
+        ast = parser.parse("verify 1 == 1 and 2 == 2")
+        assert isinstance(ast.body, BinaryOp)
+        assert ast.body.operator == 'and'
+
+    def test_or_keyword(self, parser):
+        """'or' produces BinaryOp with operator 'or'."""
+        ast = parser.parse("verify 1 == 1 or 2 == 3")
+        assert isinstance(ast.body, BinaryOp)
+        assert ast.body.operator == 'or'
+
+    def test_not_keyword(self, parser):
+        """'not' produces UnaryOp with operator 'not'."""
+        ast = parser.parse("verify not 1 == 2")
+        assert isinstance(ast.body, UnaryOp)
+        assert ast.body.operator == 'not'
+
+    def test_symbolic_and(self, parser):
+        """'&&' produces same AST as 'and'."""
+        ast = parser.parse("verify 1 == 1 && 2 == 2")
+        assert isinstance(ast.body, BinaryOp)
+        assert ast.body.operator == 'and'
+
+    def test_symbolic_or(self, parser):
+        """'||' produces same AST as 'or'."""
+        ast = parser.parse("verify 1 == 1 || 2 == 3")
+        assert isinstance(ast.body, BinaryOp)
+        assert ast.body.operator == 'or'
+
+    def test_symbolic_not(self, parser):
+        """'!' produces same AST as 'not'."""
+        ast = parser.parse("verify ! 1 == 2")
+        assert isinstance(ast.body, UnaryOp)
+        assert ast.body.operator == 'not'
+
+
+class TestBooleanEvaluation:
+    """Test boolean operator evaluation including short-circuit."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_and_true_true(self, parser, evaluator):
+        expr = parser.parse("verify 1 == 1 and 2 == 2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_and_true_false(self, parser, evaluator):
+        expr = parser.parse("verify 1 == 1 and 2 == 3")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_and_false_true(self, parser, evaluator):
+        expr = parser.parse("verify 1 == 2 and 2 == 2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_and_false_false(self, parser, evaluator):
+        expr = parser.parse("verify 1 == 2 and 3 == 4")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_or_true_false(self, parser, evaluator):
+        expr = parser.parse("verify 1 == 1 or 2 == 3")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_or_false_false(self, parser, evaluator):
+        expr = parser.parse("verify 1 == 2 or 3 == 4")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_not_true(self, parser, evaluator):
+        expr = parser.parse("verify not 1 == 2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_not_false(self, parser, evaluator):
+        expr = parser.parse("verify not 1 == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_short_circuit_and(self, parser, evaluator):
+        """Short-circuit: 0 and (1/0) should NOT raise division by zero."""
+        expr = parser.parse("verify 0 and 1 / 0 == 1")
+        # 0 is falsy, so 'and' short-circuits before evaluating 1/0
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_short_circuit_or(self, parser, evaluator):
+        """Short-circuit: 1 or (1/0) should NOT raise division by zero."""
+        expr = parser.parse("verify 1 or 1 / 0 == 1")
+        # 1 is truthy, so 'or' short-circuits before evaluating 1/0
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+
+# =============================================================================
+# Phase 3: Bitwise Operator Tests
+# =============================================================================
+
+class TestBitwiseOperators:
+    """Test bitwise operators (keyword and symbolic)."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_xor_keyword(self, parser, evaluator):
+        """5 xor 3 == 6  (0b101 ^ 0b011 = 0b110)"""
+        expr = parser.parse("verify 5 xor 3 == 6")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_band_keyword(self, parser, evaluator):
+        """5 band 3 == 1  (0b101 & 0b011 = 0b001)"""
+        expr = parser.parse("verify 5 band 3 == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_band_symbol(self, parser, evaluator):
+        """5 & 3 == 1"""
+        expr = parser.parse("verify (5 & 3) == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bor_keyword(self, parser, evaluator):
+        """5 bor 3 == 7  (0b101 | 0b011 = 0b111)"""
+        expr = parser.parse("verify 5 bor 3 == 7")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bor_symbol(self, parser, evaluator):
+        """5 | 3 == 7"""
+        expr = parser.parse("verify (5 | 3) == 7")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bitnot_symbol(self, parser, evaluator):
+        """~0 == -1  (bitwise NOT of 0 in two's complement)"""
+        expr = parser.parse("verify ~0 == -1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bitnot_keyword(self, parser, evaluator):
+        """bnot 0 == -1"""
+        expr = parser.parse("verify bnot 0 == -1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_shl_keyword(self, parser, evaluator):
+        """1 shl 3 == 8  (1 << 3 = 8)"""
+        expr = parser.parse("verify 1 shl 3 == 8")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_shl_symbol(self, parser, evaluator):
+        """1 << 3 == 8"""
+        expr = parser.parse("verify (1 << 3) == 8")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_shr_keyword(self, parser, evaluator):
+        """8 shr 3 == 1  (8 >> 3 = 1)"""
+        expr = parser.parse("verify 8 shr 3 == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_shr_symbol(self, parser, evaluator):
+        """8 >> 3 == 1"""
+        expr = parser.parse("verify (8 >> 3) == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_power_alias_caret(self, parser, evaluator):
+        """^ is a power alias in default (num) context: 2^3 == 8."""
+        expr = parser.parse("verify 2^3 == 8")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_caret_equals_doublestar(self, parser, evaluator):
+        """^ and ** produce same result in default context."""
+        expr = parser.parse("verify 2^3 == 2**3")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_nand_function(self, parser, evaluator):
+        """nand(5, 3) == ~(5 & 3) == ~1 == -2"""
+        expr = parser.parse("verify nand(5, 3) == -2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_nor_function(self, parser, evaluator):
+        """nor(5, 3) == ~(5 | 3) == ~7 == -8"""
+        expr = parser.parse("verify nor(5, 3) == -8")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_xnor_function(self, parser, evaluator):
+        """xnor(5, 3) == ~(5 ^ 3) == ~6 == -7"""
+        expr = parser.parse("verify xnor(5, 3) == -7")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+
+# =============================================================================
+# Phase 3: Chained Comparison Tests
+# =============================================================================
+
+class TestChainedComparisons:
+    """Test chained comparison expressions like 1 < x < 10."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_simple_chain_true(self, parser, evaluator):
+        """1 < 2 < 3 is True."""
+        expr = parser.parse("verify 1 < 2 < 3")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_simple_chain_false(self, parser, evaluator):
+        """1 < 2 < 2 is False (2 < 2 fails)."""
+        expr = parser.parse("verify 1 < 2 < 2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_chain_three_ops(self, parser, evaluator):
+        """1 < 2 < 3 < 4 is True."""
+        expr = parser.parse("verify 1 < 2 < 3 < 4")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_chain_mixed_ops(self, parser, evaluator):
+        """1 <= 2 < 3 is True."""
+        expr = parser.parse("verify 1 <= 2 < 3")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_chain_eq(self, parser, evaluator):
+        """5 == 5 == 5 is True."""
+        expr = parser.parse("verify 5 == 5 == 5")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_backward_compat_single(self, parser, evaluator):
+        """Single comparison n == 5 still works."""
+        expr = parser.parse("does_exist n == 5")
+        matches = list(find_matches(expr, evaluator, {"n": 10}))
+        assert matches[0] == {"n": 5}
+
+    def test_chain_with_variables(self, parser, evaluator):
+        """does_exist 1 < n < 5 finds n=2,3,4."""
+        expr = parser.parse("for_any 1 < n < 5")
+        matches = list(find_matches(expr, evaluator, {"n": 10}))
+        assert len(matches) == 3
+        found = {m["n"] for m in matches}
+        assert found == {2, 3, 4}
+
+    def test_chain_ast_structure(self, parser):
+        """Chained comparison produces Comparison with list operands/operators."""
+        ast = parser.parse("verify 1 < 2 < 3")
+        assert isinstance(ast.body, Comparison)
+        assert len(ast.body.operands) == 3
+        assert len(ast.body.operators) == 2
+        assert ast.body.operators == ["<", "<"]
+
+
+# =============================================================================
+# Phase 3: Precedence Tests
+# =============================================================================
+
+class TestPhase3Precedence:
+    """Test cross-category precedence interactions."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_bool_lower_than_comparison(self, parser, evaluator):
+        """1 < 2 and 3 > 1 → (1<2) and (3>1) → True"""
+        expr = parser.parse("verify 1 < 2 and 3 > 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bitwise_between_compare_and_arith(self, parser, evaluator):
+        """5 band 3 == 1 → (5&3) == 1 → True"""
+        expr = parser.parse("verify 5 band 3 == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_shift_higher_than_bitor(self, parser, evaluator):
+        """1 shl 3 bor 4 → (1<<3) | 4 → 8 | 4 → 12"""
+        expr = parser.parse("verify 1 shl 3 bor 4 == 12")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_arith_higher_than_shift(self, parser, evaluator):
+        """2 + 1 shl 3 → (2+1) << 3 → 3 << 3 → 24"""
+        expr = parser.parse("verify 2 + 1 shl 3 == 24")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_power_highest_after_unary(self, parser, evaluator):
+        """2^3 + 1 → (2**3) + 1 → 9"""
+        expr = parser.parse("verify 2^3 + 1 == 9")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_not_lower_than_comparison(self, parser, evaluator):
+        """not 1 < 2 → not (1<2) → not True → False"""
+        expr = parser.parse("verify not 1 < 2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_bitnot_higher_than_arith(self, parser, evaluator):
+        """~0 + 1 → (~0) + 1 → -1 + 1 → 0"""
+        expr = parser.parse("verify ~0 + 1 == 0")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_full_hierarchy_stress(self, parser, evaluator):
+        """Complex expression using multiple precedence levels.
+        1 < 2 and 5 band 3 bor 4 == 5 → (1<2) and (((5&3)|4) == 5) → True and (5==5) → True
+        """
+        expr = parser.parse("verify 1 < 2 and 5 band 3 bor 4 == 5")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+
+# =============================================================================
+# Phase 3: Context Block Tests
+# =============================================================================
+
+class TestContextBlocks:
+    """Test context block parsing and evaluation (num[], bit[], bool[])."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_bit_context_caret_xor(self, parser, evaluator):
+        """bit[2^3] → XOR → 2 XOR 3 = 1"""
+        expr = parser.parse("verify bit[2^3] == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_num_context_caret_power(self, parser, evaluator):
+        """num[2^3] → power → 2**3 = 8"""
+        expr = parser.parse("verify num[2^3] == 8")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bit_context_and_bitwise(self, parser, evaluator):
+        """bit[5 and 3] → bitwise AND → 5 & 3 = 1"""
+        expr = parser.parse("verify bit[5 and 3] == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bit_context_or_bitwise(self, parser, evaluator):
+        """bit[5 or 3] → bitwise OR → 5 | 3 = 7"""
+        expr = parser.parse("verify bit[5 or 3] == 7")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bit_context_not_bitwise(self, parser, evaluator):
+        """bit[not 0] → bitwise NOT → ~0 = -1"""
+        expr = parser.parse("verify bit[not 0] == -1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_mixed_contexts(self, parser, evaluator):
+        """bit[2^3] + 1 → 1 + 1 → 2  (bit result converts to num)"""
+        expr = parser.parse("verify bit[2^3] + 1 == 2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_context_block_ast(self, parser):
+        """Context block produces ContextBlock AST node."""
+        ast = parser.parse("verify bit[5] == 5")
+        # The body should be a Comparison, left side should be ContextBlock
+        assert isinstance(ast.body, Comparison)
+        assert isinstance(ast.body.operands[0], ContextBlock)
+        assert ast.body.operands[0].context == "bit"
+
+    def test_bool_context_explicit(self, parser, evaluator):
+        """bool[1 and 1] → logical AND → True (1 is truthy)."""
+        expr = parser.parse("verify bool[1 and 1]")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+
+# =============================================================================
+# Phase 3: Free Variable Tests for New Operators
+# =============================================================================
+
+class TestPhase3FreeVariables:
+    """Test free variable detection for boolean/bitwise/chained expressions."""
+
+    def test_boolean_free_vars(self):
+        comp1 = Comparison(operands=[Variable("n"), Literal(0)], operators=[">"])
+        comp2 = Comparison(operands=[Variable("m"), Literal(10)], operators=["<"])
+        expr = Expression(
+            quantifier="for_any",
+            body=BinaryOp(comp1, 'and', comp2)
+        )
+        assert find_free_variables(expr) == {"n", "m"}
+
+    def test_bitwise_free_vars(self):
+        node = BinaryOp(Variable("a"), 'xor', Variable("b"))
+        assert find_free_variables(node) == {"a", "b"}
+
+    def test_bitnot_free_vars(self):
+        node = UnaryOp('~', Variable("x"))
+        assert find_free_variables(node) == {"x"}
+
+    def test_chained_comparison_free_vars(self):
+        comp = Comparison(
+            operands=[Literal(1), Variable("n"), Variable("m")],
+            operators=["<", "<"]
+        )
+        assert find_free_variables(comp) == {"n", "m"}
+
+    def test_context_block_free_vars(self):
+        block = ContextBlock("bit", BinaryOp(Variable("x"), 'xor', Variable("y")))
+        assert find_free_variables(block) == {"x", "y"}
+
+
+# =============================================================================
+# Phase 3: Integration Tests
+# =============================================================================
+
+class TestPhase3Integration:
+    """End-to-end tests combining boolean/bitwise with existing features."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_boolean_with_find_matches(self, parser, evaluator):
+        """does_exist n > 0 and n < 10 and tri(n) == 28 → n=7"""
+        expr = parser.parse("does_exist n > 0 and n < 10 and tri(n) == 28")
+        matches = list(find_matches(expr, evaluator, {"n": 20}))
+        assert len(matches) == 1
+        assert matches[0]["n"] == 7
+
+    def test_boolean_verify(self, parser, evaluator):
+        """verify 2 > 1 and 3 > 2 → True"""
+        expr = parser.parse("verify 2 > 1 and 3 > 2")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_bitwise_with_find_matches(self, parser, evaluator):
+        """does_exist n xor 3 == 6 → n=5 (because 5^3=6)"""
+        expr = parser.parse("does_exist n xor 3 == 6")
+        matches = list(find_matches(expr, evaluator, {"n": 10}))
+        assert len(matches) == 1
+        assert matches[0]["n"] == 5
+
+    def test_chained_with_boolean(self, parser, evaluator):
+        """does_exist 1 < n < 10 and tri(n) == 28 → n=7"""
+        expr = parser.parse("does_exist 1 < n < 10 and tri(n) == 28")
+        matches = list(find_matches(expr, evaluator, {"n": 20}))
+        assert len(matches) == 1
+        assert matches[0]["n"] == 7
+
+    def test_keyword_variables_not_reserved(self, parser):
+        """Variables like 'android', 'notable' still parse (longer than keywords)."""
+        ast = parser.parse("does_exist android == 5")
+        free = find_free_variables(ast)
+        assert "android" in free
+
+    def test_backward_compat_primesum(self, parser, evaluator):
+        """Original use case still works: does_exist primesum(n,2) == 666"""
+        expr = parser.parse("does_exist primesum(n,2) == 666")
+        matches = list(find_matches(expr, evaluator, {"n": 100}))
+        assert len(matches) == 1
+        assert matches[0]["n"] == 7

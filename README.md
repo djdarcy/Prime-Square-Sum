@@ -69,8 +69,26 @@ python prime-square-sum.py --expr "does_exist n**2 == 25"                     # 
 python prime-square-sum.py --expr "does_exist tri(n) + 1 == 11" --max-n 10    # n=4
 python prime-square-sum.py --expr "verify (2 + 3) * 4 == 20"                  # true
 
-# Operators: +  -  *  /  //  %  **  (unary: -x, +x)
+# Operators: +  -  *  /  //  %  **  ^  (unary: -x, +x)
 # Python-compatible precedence and associativity
+```
+
+### Boolean & Bitwise Operators (v0.7.14+)
+
+```bash
+# Boolean logic with short-circuit evaluation
+python prime-square-sum.py --expr "does_exist n > 0 and n < 10 and tri(n) == 28" --max-n 20
+
+# Bitwise operations via keyword operators
+python prime-square-sum.py --expr "verify 5 xor 3 == 6"
+python prime-square-sum.py --expr "verify 5 band 3 == 1"
+
+# Chained comparisons
+python prime-square-sum.py --expr "does_exist 1 < n < 10 and tri(n) == 28" --max-n 20
+
+# Context blocks for operator disambiguation
+python prime-square-sum.py --expr "verify bit[2^3] == 1"    # ^ is XOR in bit context
+python prime-square-sum.py --expr "verify 2^3 == 8"          # ^ is power by default
 ```
 
 See [docs/expressions.md](docs/expressions.md) for the precedence table and behavioral notes.

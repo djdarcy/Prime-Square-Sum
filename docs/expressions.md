@@ -62,9 +62,27 @@ Error: Expression has free variables (n) but no quantifier.
 Use 'does_exist' or 'for_any' prefix, e.g.: does_exist primesum(n,2) == 666
 ```
 
-### Arithmetic Operators (v0.7.12+)
+### Operator Precedence (v0.7.14+)
 
-Expressions support standard arithmetic operators with Python-style precedence:
+Full operator precedence from lowest to highest binding power:
+
+| Level | Operators | Associativity | Type | Example |
+|-------|-----------|---------------|------|---------|
+| 1 (lowest) | `or`, `\|\|` | Left | Logical OR | `a or b` |
+| 2 | `and`, `&&` | Left | Logical AND | `a and b` |
+| 3 | `not`, `!` | Right (prefix) | Logical NOT | `not x` |
+| 4 | `==`, `!=`, `<`, `>`, `<=`, `>=` | Chainable | Comparison | `1 < x < 10` |
+| 5 | `bor`, `\|` | Left | Bitwise OR | `5 bor 3` |
+| 6 | `xor` | Left | Bitwise XOR | `5 xor 3` |
+| 7 | `band`, `&` | Left | Bitwise AND | `5 band 3` |
+| 8 | `shl`/`<<`, `shr`/`>>` | Left | Bit shifts | `1 << 3` |
+| 9 | `+`, `-` | Left | Addition | `2 + 3` |
+| 10 | `*`, `/`, `//`, `%` | Left | Multiplication | `6 * 7` |
+| 11 | `-x`, `+x`, `~`, `bnot` | Right (prefix) | Unary | `~0`, `-x` |
+| 12 | `**`, `^` | Right | Exponentiation | `2^3` = 8 |
+| 13 (highest) | Atoms, context blocks | N/A | Terminals | `tri(n)`, `bit[expr]` |
+
+### Arithmetic Operators (v0.7.12+)
 
 ```bash
 # Arithmetic in expressions
@@ -75,19 +93,6 @@ Expressions support standard arithmetic operators with Python-style precedence:
 --expr "does_exist primesum(n,2) - 1 == 665" --max-n 10 # n=7
 ```
 
-#### Operator Precedence (highest to lowest)
-
-| Precedence | Operators | Associativity | Example |
-|------------|-----------|---------------|---------|
-| 1 (highest) | Function calls, `(expr)` | N/A | `tri(n)`, `(2+3)` |
-| 2 | `**` | Right | `2**3**2` = `2**(3**2)` = 512 |
-| 3 | unary `-`, `+` | Right (prefix) | `-3`, `+x` |
-| 4 | `*`, `/`, `//`, `%` | Left | `2 * 3 / 4` |
-| 5 | `+`, `-` | Left | `1 + 2 - 3` |
-| 6 (lowest) | `==`, `!=`, `<`, `>`, `<=`, `>=` | N/A | `n == 5` |
-
-#### Arithmetic Operators
-
 | Operator | Operation | Example | Result |
 |----------|-----------|---------|--------|
 | `+` | Addition | `2 + 3` | `5` |
@@ -97,6 +102,7 @@ Expressions support standard arithmetic operators with Python-style precedence:
 | `//` | Floor division | `7 // 2` | `3` |
 | `%` | Modulo | `7 % 3` | `1` |
 | `**` | Exponentiation | `2 ** 10` | `1024` |
+| `^` | Power alias | `2^3` | `8` |
 | `-x` | Unary negation | `-5` | `-5` |
 | `+x` | Unary positive | `+5` | `5` |
 
@@ -104,6 +110,7 @@ Expressions support standard arithmetic operators with Python-style precedence:
 
 - **`-3**2` equals `-9`**: Exponentiation binds tighter than unary minus (Python convention). Use `(-3)**2` for 9.
 - **`2**3**2` equals `512`**: Right-associative — evaluated as `2**(3**2)` = `2**9`.
+- **`2^3` equals `8`**: `^` is a power alias (math convention), same as `**`.
 - **`7 / 2` equals `3.5`**: True division always returns float.
 - **`7 // 2` equals `3`**: Floor division rounds toward negative infinity.
 - **`0**0` equals `1`**: Python convention.
@@ -117,6 +124,91 @@ Arithmetic expressions can be used inside function arguments:
 --expr "verify pow(2 + 1, 2) == 9"       # pow(3, 2) = 9
 --expr "does_exist primesum(n + 1, 2) == tri(m)"
 ```
+
+### Boolean Operators (v0.7.14+)
+
+Logical operators with short-circuit evaluation:
+
+```bash
+--expr "does_exist n > 0 and n < 10 and tri(n) == 28" --max-n 20   # n=7
+--expr "verify 2 > 1 and 3 > 2"                                     # true
+--expr "verify not 1 > 2"                                            # true
+```
+
+| Operator | Alias | Operation | Short-circuit |
+|----------|-------|-----------|---------------|
+| `and` | `&&` | Logical AND | Stops on first falsy |
+| `or` | `\|\|` | Logical OR | Stops on first truthy |
+| `not` | `!` | Logical NOT | N/A (unary) |
+
+**Short-circuit behavior**: `0 and 1/0` does not raise an error (stops at `0`). `1 or 1/0` does not raise (stops at `1`).
+
+### Bitwise Operators (v0.7.14+)
+
+Integer bit manipulation operators, available as keywords or symbols:
+
+```bash
+--expr "verify 5 xor 3 == 6"       # 101 ^ 011 = 110
+--expr "verify 5 band 3 == 1"      # 101 & 011 = 001
+--expr "verify 5 bor 3 == 7"       # 101 | 011 = 111
+--expr "verify ~0 == -1"           # bitwise NOT
+--expr "verify 1 << 3 == 8"        # left shift
+--expr "verify 8 >> 3 == 1"        # right shift
+```
+
+| Keyword | Symbol | Operation | Example |
+|---------|--------|-----------|---------|
+| `bor` | `\|` | Bitwise OR | `5 bor 3` = 7 |
+| `xor` | — | Bitwise XOR | `5 xor 3` = 6 |
+| `band` | `&` | Bitwise AND | `5 band 3` = 1 |
+| `shl` | `<<` | Left shift | `1 shl 3` = 8 |
+| `shr` | `>>` | Right shift | `8 shr 3` = 1 |
+| `bnot` | `~` | Bitwise NOT (prefix) | `bnot 0` = -1 |
+
+**Compound operations** (registered as functions):
+
+| Function | Operation | Example |
+|----------|-----------|---------|
+| `nand(a, b)` | `~(a & b)` | `nand(5, 3)` = -2 |
+| `nor(a, b)` | `~(a \| b)` | `nor(5, 3)` = -8 |
+| `xnor(a, b)` | `~(a ^ b)` | `xnor(5, 3)` = -7 |
+
+### Chained Comparisons (v0.7.14+)
+
+Comparisons can be chained, Python-style:
+
+```bash
+--expr "verify 1 < 2 < 3"                                           # true
+--expr "does_exist 1 < n < 10 and tri(n) == 28" --max-n 20          # n=7
+--expr "verify 1 <= 2 < 3"                                          # true
+```
+
+`a < b < c` evaluates as `(a < b) and (b < c)` with `b` evaluated only once.
+
+### Context Blocks (v0.7.14+)
+
+Context blocks change how ambiguous operators are interpreted:
+
+```bash
+--expr "verify bit[2^3] == 1"          # ^ is XOR in bit context: 2 XOR 3 = 1
+--expr "verify 2^3 == 8"               # ^ is power in default context
+--expr "verify bit[5 or 3] == 7"       # or is bitwise OR in bit context
+--expr "verify bit[5 and 3] == 1"      # and is bitwise AND in bit context
+```
+
+| Block | Effect |
+|-------|--------|
+| `num[expr]` | Numeric context (default — no-op) |
+| `bit[expr]` | Bitwise context: `^`→XOR, `and`→bitwise AND, `or`→bitwise OR, `not`→bitwise NOT |
+| `bool[expr]` | Explicit boolean context (same as default for `and`/`or`/`not`) |
+
+**Mixed contexts**: Context blocks can appear anywhere in an expression:
+
+```bash
+--expr "verify bit[2^3] + 1 == 2"      # bit context for XOR, then addition in default context
+```
+
+**Note**: Inside `bit[...]`, `^` still parses at exponentiation precedence level. For expressions where this matters, use the `xor` keyword instead or add parentheses.
 
 ### Comparison Operators
 
@@ -313,11 +405,9 @@ These features are not currently supported in the expression grammar. Most can b
 | Implicit multiplication (`2x`) | Write `2 * x` |
 | Scientific notation (`1.5e10`) | Use `1.5 * pow(10, 10)` |
 | Leading-dot decimals (`.5`) | Write `0.5` |
-| Chained comparisons (`1 < x < 10`) | Use separate expressions |
-| Boolean operators (`and`, `or`, `not`) | Future work — use separate expressions |
-| Bitwise operators (`&`, `\|`, `^`, `~`) | Future work — create user functions |
 | Complex numbers (`3+2j`) | Future work — use `complex(a, b)` function |
 | Assignment (`x = 3 + 2`) | Use `--equation` with parameters |
+| `xor` as variable name | Reserved — use a different name |
 
 ## See Also
 
