@@ -76,7 +76,9 @@ Powers of 11 embed Pascal coefficients:
 11⁴ = 14641   → {1, 4, 6, 4, 1}
 ```
 
-This elegant pattern applies to polynomial expansions but doesn't help with prime sums - there's no polynomial structure to exploit.
+This generalizes across number bases (the Mathematica `PascalRow` function in the original notebook demonstrates this empirically). The same {1, 4, 6, 4, 1} coefficients from Pascal Row 4 define a weighted number system in which stf(b) values can be represented. When stf(b) is divisible by 6, the representation collapses to a "pure center" pattern: **{0, 0, X, 0, 0}** — meaning the value is carried entirely by the central weight (6).
+
+This connects directly to our proof work: we've formally proven that `primesum(n, 2) % 6 = (n + 5) % 6`, meaning primesum is divisible by 6 only when n ≡ 1 (mod 6). Conjecture 5 observes that stf(tri(k²)) is divisible by 6 precisely when r is a perfect square — the two mod 6 conditions constrain the search from both sides. See [conjectures.md](../paper%20and%20notes/conjectures.md#conjecture-5-the-stf-k²-divisibility-conjecture) for details.
 
 ### Composite Base Sieving
 
@@ -93,6 +95,8 @@ This tool enables **empirical mathematics**:
 
 The goal isn't just to find answers - it's to find **patterns worth proving**.
 
+The mod 6 pattern is a concrete example: bounded computation discovered that primesum(n, 2) follows a cyclic pattern mod 6, which was then formally proven by induction in Lean 4 (see [proofs/](../proofs/)). Similarly, the Pascal Row 4 "pure center" pattern was discovered computationally and connects to an open conjecture about perfect-square triangular bases.
+
 ## Verification
 
 Run the verification script to confirm the core relationships:
@@ -108,3 +112,5 @@ This verifies that `stf(666)` equals the 98-digit target value that the project 
 - [README.md](../README.md) - Project overview and the stf(10) = 666 discovery
 - [expressions.md](expressions.md) - Expression syntax for querying relationships
 - [paper and notes/](../paper%20and%20notes/) - Original Mathematica notebook with theoretical background
+- [conjectures.md](../paper%20and%20notes/conjectures.md) - Open conjectures including the stf-k² divisibility pattern
+- [proofs/](../proofs/) - Formal Lean 4 proofs (prime_sq_mod_six, primesumN_mod6, stf = primesum chain)

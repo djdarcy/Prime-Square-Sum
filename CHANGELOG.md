@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.7.11] - 2026-02-06
+## [0.7.13] - 2026-02-07
 
 ### Added
 - **Lean 4 + Mathlib v4.27.0 infrastructure**
@@ -36,18 +36,23 @@ All notable changes to this project will be documented in this file.
 - **New proof file: `Core.lean`** — connecting theorems
   - `stf_eq_primesum_7_2`, `stf_ten_is_triangular`, `chain_tri4_to_tri36`, `core_pattern`
 - **New proof file: `PrimesumMod6.lean`**
-  - primesum(n,2) ≡ (n+5) mod 6 for all n ≥ 3
+  - primesum(n,2) ≡ (n+5) mod 6 for all n ≥ 2
   - Algebraic core: (6k+1)² % 6 = 1 and (6k+5)² % 6 = 1 (ring + omega)
   - Bounded verification for n = 3..7
+  - `prime_sq_mod_six` — ∀ p, Prime p → p > 3 → p² % 6 = 1 (primality + interval_cases)
+  - `primesumN_mod6` — ∀ n ≥ 2, primesumN(n,2) ≡ (n+5) mod 6 (induction via Nat.nth + Finset.sum)
+  - Uses Mathlib's `Nat.nth Nat.Prime` for nth prime, `Finset.sum` for summation
 - **Conjecture 5** (stf-k² pattern) added to `paper and notes/conjectures.md`
 - **`utils/pascal_systems.py`** — Pascal-weighted number system analytical tools
 - 12 verification/thinking scripts in `tests/one-offs/thinking/`
+- **Updated `docs/rationale.md`** — Pascal's Triangle connection now links to the Pascal-weighted number system, the "{0, 0, X, 0, 0}" pure center pattern, proven primesum mod 6 theorem, and Conjecture 5
 
 ### Technical Notes
 - Unified library structure: single `[[lean_lib]]` with `roots` array enables cross-module imports
 - Proof dependency chain: tri_zero → tri_succ → two_mul_tri → tri_is_triangular → tri_tri_is_triangular
 - Core.lean imports TriSum + Primes + PrimesumMod6 to prove the connecting identity
 - Structural proofs for 55 and 666 avoid `native_decide` by composing general theorems
+- PrimesumMod6 proof chain: sq_6k_plus_{1,5}_mod6 → prime_sq_mod_six → primesumN_mod6
 - Gem consulted for proof strategy and project organization; API names verified against Mathlib source
 
 ### Design Documents

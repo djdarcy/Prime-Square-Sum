@@ -79,17 +79,37 @@ Connecting theorems tying stf to primesum.
 - `ten_eq_primesum_3_1` — 10 = primesum(3, 1)
 
 ### PrimesumMod6.lean
-Formal proof that primesum(n, 2) ≡ (n + 5) (mod 6) for all n ≥ 3.
+Formal proof that primesum(n, 2) ≡ (n + 5) (mod 6) for all n ≥ 2.
 
 **Key theorems proven:**
-- `sq_6k_plus_1_mod6` - (6k+1)² ≡ 1 (mod 6) for all k (proven by ring_nf + omega)
-- `sq_6k_plus_5_mod6` - (6k+5)² ≡ 1 (mod 6) for all k (proven by ring_nf + omega)
-- `ps_mod6_n3` through `ps_mod6_n7` - Bounded verification for n = 3..7
-- `six_divides_666` - 666 % 6 = 0
+
+*Algebraic core (Part 1):*
+- `sq_6k_plus_1_mod6` — (6k+1)² ≡ 1 (mod 6) for all k (ring + omega)
+- `sq_6k_plus_5_mod6` — (6k+5)² ≡ 1 (mod 6) for all k (ring + omega)
+
+*Bounded verification (Parts 2–4):*
+- `ps_mod6_n3` through `ps_mod6_n7` — Bounded verification for n = 3..7
+- `six_divides_666` — 666 % 6 = 0
+
+*General prime square theorem (Part 6):*
+- `prime_sq_mod_six` — **∀ p, Prime p → p > 3 → p² % 6 = 1** (primality + interval_cases)
+
+*General primesum induction (Part 7):*
+- `nthPrime` — The nth prime via Mathlib's `Nat.nth` (noncomputable)
+- `primesumN` — Sum of first n primes raised to a power via `Finset.sum`
+- `nthPrime_prime`, `nthPrime_strictMono`, `nthPrime_gt_three` — Helper lemmas
+- `primesumN_mod6` — **∀ n ≥ 2, primesumN(n, 2) % 6 = (n + 5) % 6** (induction)
 
 **Corollary:** primesum(n, 2) is divisible by 6 iff n ≡ 1 (mod 6). This provides a necessary condition for stf(b) = primesum(n, 2) — the n value must be congruent to 1 mod 6.
 
-**Mathematical basis:** All primes p > 3 satisfy p = 6k ± 1, therefore p² ≡ 1 (mod 6). The algebraic core (`(6k+1)² % 6 = 1` and `(6k+5)² % 6 = 1`) is fully machine-verified using Mathlib's `ring` tactic + `omega`. The general inductive proof of the primesum formula requires a "nth prime" definition for full formalization.
+**Mathematical basis:** All primes p > 3 satisfy p = 6k ± 1, therefore p² ≡ 1 (mod 6). The algebraic core (`(6k+1)² % 6 = 1` and `(6k+5)² % 6 = 1`) is fully machine-verified using Mathlib's `ring` tactic + `omega`. The general inductive proof uses Mathlib's `Nat.nth Nat.Prime` for the nth prime definition.
+
+*Dependency chain:*
+```
+sq_6k_plus_{1,5}_mod6 (algebraic core)
+    → prime_sq_mod_six (all primes > 3)
+        → primesumN_mod6 (induction using Nat.nth + Finset.sum)
+```
 
 ### trisum_theorems.md
 Documentation of the mathematical theorems, including:
@@ -152,3 +172,4 @@ The proofs here formalize the mathematical foundations that make this relationsh
 These proofs support concepts from:
 - [Zero_AG to The Scarcity Framework](https://github.com/Way-of-Scarcity/papers) - Broader mathematical framework
 - The 2010 Mathematica notebook in `paper and notes/`
+- [docs/rationale.md](../docs/rationale.md) - Why computational exploration discovers these patterns before proofs can formalize them
