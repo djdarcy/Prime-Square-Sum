@@ -44,6 +44,7 @@ from utils.grammar import (
     EvaluationError,
     find_free_variables,
     find_matches,
+    validate_expression,
 )
 from utils.function_registry import FunctionRegistry
 from utils.cli import (
@@ -304,6 +305,13 @@ def handle_expression(args, registry: FunctionRegistry) -> int:
         ast = parser.parse(expr_str)
     except ParseError as e:
         print(f"Parse error: {e}", file=sys.stderr)
+        return 1
+
+    # Validate expression (compile phase)
+    validation_errors = validate_expression(ast, registry)
+    if validation_errors:
+        for err in validation_errors:
+            print(f"Error: {err}", file=sys.stderr)
         return 1
 
     # Create evaluator

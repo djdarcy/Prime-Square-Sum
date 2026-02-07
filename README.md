@@ -59,6 +59,22 @@ python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 
 python prime-square-sum.py --list functions
 ```
 
+### Arithmetic Expressions (v0.7.12+)
+
+Use standard arithmetic operators directly in expressions:
+
+```bash
+# Arithmetic in expressions
+python prime-square-sum.py --expr "does_exist n**2 == 25"                     # n=5
+python prime-square-sum.py --expr "does_exist tri(n) + 1 == 11" --max-n 10    # n=4
+python prime-square-sum.py --expr "verify (2 + 3) * 4 == 20"                  # true
+
+# Operators: +  -  *  /  //  %  **  (unary: -x, +x)
+# Python-compatible precedence and associativity
+```
+
+See [docs/expressions.md](docs/expressions.md) for the precedence table and behavioral notes.
+
 ### Verify Mode (v0.7.6+)
 
 Verify known results without iteration using the `verify` quantifier:

@@ -62,7 +62,63 @@ Error: Expression has free variables (n) but no quantifier.
 Use 'does_exist' or 'for_any' prefix, e.g.: does_exist primesum(n,2) == 666
 ```
 
-### Operators
+### Arithmetic Operators (v0.7.12+)
+
+Expressions support standard arithmetic operators with Python-style precedence:
+
+```bash
+# Arithmetic in expressions
+--expr "does_exist n**2 == 25"                          # n=5
+--expr "verify 2 + 3 * 4 == 14"                         # true (precedence)
+--expr "verify (2 + 3) * 4 == 20"                       # true (parens)
+--expr "does_exist tri(n) + 1 == 11" --max-n 10         # n=4
+--expr "does_exist primesum(n,2) - 1 == 665" --max-n 10 # n=7
+```
+
+#### Operator Precedence (highest to lowest)
+
+| Precedence | Operators | Associativity | Example |
+|------------|-----------|---------------|---------|
+| 1 (highest) | Function calls, `(expr)` | N/A | `tri(n)`, `(2+3)` |
+| 2 | `**` | Right | `2**3**2` = `2**(3**2)` = 512 |
+| 3 | unary `-`, `+` | Right (prefix) | `-3`, `+x` |
+| 4 | `*`, `/`, `//`, `%` | Left | `2 * 3 / 4` |
+| 5 | `+`, `-` | Left | `1 + 2 - 3` |
+| 6 (lowest) | `==`, `!=`, `<`, `>`, `<=`, `>=` | N/A | `n == 5` |
+
+#### Arithmetic Operators
+
+| Operator | Operation | Example | Result |
+|----------|-----------|---------|--------|
+| `+` | Addition | `2 + 3` | `5` |
+| `-` | Subtraction | `10 - 4` | `6` |
+| `*` | Multiplication | `3 * 7` | `21` |
+| `/` | True division | `7 / 2` | `3.5` |
+| `//` | Floor division | `7 // 2` | `3` |
+| `%` | Modulo | `7 % 3` | `1` |
+| `**` | Exponentiation | `2 ** 10` | `1024` |
+| `-x` | Unary negation | `-5` | `-5` |
+| `+x` | Unary positive | `+5` | `5` |
+
+#### Behavioral Notes
+
+- **`-3**2` equals `-9`**: Exponentiation binds tighter than unary minus (Python convention). Use `(-3)**2` for 9.
+- **`2**3**2` equals `512`**: Right-associative — evaluated as `2**(3**2)` = `2**9`.
+- **`7 / 2` equals `3.5`**: True division always returns float.
+- **`7 // 2` equals `3`**: Floor division rounds toward negative infinity.
+- **`0**0` equals `1`**: Python convention.
+- **Division by zero**: Raises an error with a clear message.
+
+#### Arithmetic in Function Arguments
+
+Arithmetic expressions can be used inside function arguments:
+
+```bash
+--expr "verify pow(2 + 1, 2) == 9"       # pow(3, 2) = 9
+--expr "does_exist primesum(n + 1, 2) == tri(m)"
+```
+
+### Comparison Operators
 
 | Operator | Meaning |
 |----------|---------|
@@ -229,6 +285,39 @@ python prime-square-sum.py --target 666 --verbose
 # Found: n=7
 # Time: 0.023s
 ```
+
+## Expression Validation
+
+Expressions are validated before evaluation (v0.7.12+). The parser checks:
+
+1. **Syntax**: Malformed expressions produce parse errors with position indicators
+2. **Functions**: Unknown function names are caught before iteration begins
+3. **Arity**: Wrong number of arguments produces a clear error
+
+```bash
+# Unknown function caught at validation time
+python prime-square-sum.py --expr "does_exist bogus(n) == 5"
+# Error: Unknown function: 'bogus'
+
+# Arity mismatch caught at validation time
+python prime-square-sum.py --expr "verify tri(1, 2, 3) == 5"
+# Error: tri() requires 1 argument(s), got 3
+```
+
+## Current Limitations
+
+These features are not currently supported in the expression grammar. Most can be worked around using user-defined functions via `--functions` or saved equations in `equations.json`.
+
+| Feature | Workaround |
+|---------|-----------|
+| Implicit multiplication (`2x`) | Write `2 * x` |
+| Scientific notation (`1.5e10`) | Use `1.5 * pow(10, 10)` |
+| Leading-dot decimals (`.5`) | Write `0.5` |
+| Chained comparisons (`1 < x < 10`) | Use separate expressions |
+| Boolean operators (`and`, `or`, `not`) | Future work — use separate expressions |
+| Bitwise operators (`&`, `\|`, `^`, `~`) | Future work — create user functions |
+| Complex numbers (`3+2j`) | Future work — use `complex(a, b)` function |
+| Assignment (`x = 3 + 2`) | Use `--equation` with parameters |
 
 ## See Also
 

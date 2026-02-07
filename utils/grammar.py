@@ -21,6 +21,7 @@ Epic: #13 (Generalized Expression Grammar)
 from __future__ import annotations
 
 import itertools
+import operator as op_module
 from abc import ABC
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Union
@@ -71,6 +72,21 @@ class Comparison(ASTNode):
 
 
 @dataclass
+class BinaryOp(ASTNode):
+    """Binary arithmetic operation: left OP right."""
+    left: ASTNode
+    operator: str  # +, -, *, /, //, %, **
+    right: ASTNode
+
+
+@dataclass
+class UnaryOp(ASTNode):
+    """Unary operation: OP operand."""
+    operator: str  # -, +
+    operand: ASTNode
+
+
+@dataclass
 class Expression(ASTNode):
     """A complete expression with quantifier and comparison."""
     quantifier: Optional[str]  # "for_any", "does_exist", "verify", or None (auto-detect)
@@ -92,9 +108,36 @@ GRAMMAR = r"""
 
     COMP_OP: "==" | "!=" | "<=" | ">=" | "<" | ">"
 
-    term: function_call
-        | literal
-        | variable
+    // Arithmetic precedence hierarchy (lowest to highest):
+    //   1. +, - (additive, left-associative)
+    //   2. *, /, //, % (multiplicative, left-associative)
+    //   3. ** (exponentiation, right-associative)
+    //   4. unary -, + (prefix)
+    //   5. atoms: literals, variables, function calls, (expr)
+
+    ?term: add_expr
+
+    ?add_expr: mul_expr
+             | add_expr "+" mul_expr   -> add
+             | add_expr "-" mul_expr   -> sub
+
+    ?mul_expr: unary_expr
+             | mul_expr "*" unary_expr    -> mul
+             | mul_expr "/" unary_expr    -> div
+             | mul_expr "//" unary_expr   -> floordiv
+             | mul_expr "%" unary_expr    -> mod_op
+
+    ?unary_expr: power_expr
+               | "-" unary_expr    -> neg
+               | "+" unary_expr    -> pos
+
+    ?power_expr: atom
+               | atom "**" unary_expr  -> power
+
+    ?atom: function_call
+         | literal
+         | variable
+         | "(" term ")"
 
     function_call: NAME "(" [args] ")"
     args: term ("," term)*
@@ -139,9 +182,18 @@ class ASTTransformer(Transformer):
     def comparison(self, left: ASTNode, op, right: ASTNode) -> Comparison:
         return Comparison(left=left, operator=str(op), right=right)
 
-    def term(self, child: ASTNode) -> ASTNode:
-        """Unwrap term rule - just returns its single child."""
-        return child
+    # Arithmetic operators -> BinaryOp
+    def add(self, left, right):      return BinaryOp(left, '+', right)
+    def sub(self, left, right):      return BinaryOp(left, '-', right)
+    def mul(self, left, right):      return BinaryOp(left, '*', right)
+    def div(self, left, right):      return BinaryOp(left, '/', right)
+    def floordiv(self, left, right): return BinaryOp(left, '//', right)
+    def mod_op(self, left, right):   return BinaryOp(left, '%', right)
+    def power(self, left, right):    return BinaryOp(left, '**', right)
+
+    # Unary operators -> UnaryOp
+    def neg(self, operand):          return UnaryOp('-', operand)
+    def pos(self, operand):          return UnaryOp('+', operand)
 
     def function_call(self, name, *args_or_none) -> FunctionCall:
         # args_or_none is either empty or contains a list of args
@@ -242,6 +294,55 @@ class ExpressionParser:
 
 
 # =============================================================================
+# Expression Validation ("Compile" Phase)
+# =============================================================================
+
+def validate_expression(expr: ASTNode, registry: FunctionRegistry) -> List[str]:
+    """
+    Validate an expression AST before evaluation.
+
+    Checks for unknown functions and argument count mismatches.
+    Run this after parsing but before evaluation to catch errors early.
+
+    Args:
+        expr: Parsed AST node
+        registry: Function registry to validate against
+
+    Returns:
+        List of error messages (empty if valid)
+    """
+    errors: List[str] = []
+    _walk_validate(expr, registry, errors)
+    return errors
+
+
+def _walk_validate(node: ASTNode, registry: FunctionRegistry, errors: List[str]) -> None:
+    """Recursively walk AST and collect validation errors."""
+    if isinstance(node, FunctionCall):
+        # Check function exists
+        if node.name not in registry:
+            errors.append(f"Unknown function: '{node.name}'")
+        else:
+            # Check arity
+            err = registry.get_validation_error(node.name, len(node.args))
+            if err:
+                errors.append(err)
+        # Validate arguments recursively
+        for arg in node.args:
+            _walk_validate(arg, registry, errors)
+    elif isinstance(node, BinaryOp):
+        _walk_validate(node.left, registry, errors)
+        _walk_validate(node.right, registry, errors)
+    elif isinstance(node, UnaryOp):
+        _walk_validate(node.operand, registry, errors)
+    elif isinstance(node, Comparison):
+        _walk_validate(node.left, registry, errors)
+        _walk_validate(node.right, registry, errors)
+    elif isinstance(node, Expression):
+        _walk_validate(node.comparison, registry, errors)
+
+
+# =============================================================================
 # Free Variable Detection
 # =============================================================================
 
@@ -264,6 +365,10 @@ def find_free_variables(node: ASTNode) -> Set[str]:
         for arg in node.args:
             result |= find_free_variables(arg)
         return result
+    elif isinstance(node, BinaryOp):
+        return find_free_variables(node.left) | find_free_variables(node.right)
+    elif isinstance(node, UnaryOp):
+        return find_free_variables(node.operand)
     elif isinstance(node, Comparison):
         return find_free_variables(node.left) | find_free_variables(node.right)
     elif isinstance(node, Expression):
@@ -329,6 +434,15 @@ class ExpressionEvaluator:
                     f"Error calling {node.name}({', '.join(str(a) for a in args)}): {e}"
                 )
 
+        elif isinstance(node, BinaryOp):
+            left = self.evaluate(node.left, context)
+            right = self.evaluate(node.right, context)
+            return self._binary_op(left, node.operator, right)
+
+        elif isinstance(node, UnaryOp):
+            operand = self.evaluate(node.operand, context)
+            return self._unary_op(node.operator, operand)
+
         elif isinstance(node, Comparison):
             left = self.evaluate(node.left, context)
             right = self.evaluate(node.right, context)
@@ -339,6 +453,34 @@ class ExpressionEvaluator:
 
         else:
             raise EvaluationError(f"Unknown AST node type: {type(node).__name__}")
+
+    _BINARY_OPS = {
+        '+': op_module.add,
+        '-': op_module.sub,
+        '*': op_module.mul,
+        '/': op_module.truediv,
+        '//': op_module.floordiv,
+        '%': op_module.mod,
+        '**': op_module.pow,
+    }
+
+    _UNARY_OPS = {
+        '-': op_module.neg,
+        '+': op_module.pos,
+    }
+
+    def _binary_op(self, left: Any, op: str, right: Any) -> Any:
+        """Perform a binary arithmetic operation."""
+        if op in ('/', '//', '%') and right == 0:
+            raise EvaluationError(f"Division by zero: {left} {op} {right}")
+        try:
+            return self._BINARY_OPS[op](left, right)
+        except (OverflowError, ValueError) as e:
+            raise EvaluationError(f"Arithmetic error: {left} {op} {right} -- {e}")
+
+    def _unary_op(self, op: str, operand: Any) -> Any:
+        """Perform a unary operation."""
+        return self._UNARY_OPS[op](operand)
 
     def _compare(self, left: Any, op: str, right: Any) -> bool:
         """Perform a comparison operation."""

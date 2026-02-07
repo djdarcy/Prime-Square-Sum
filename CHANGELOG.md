@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.12] - 2026-02-07
+
+### Added
+- **Arithmetic operators in expressions** (Issue #44 Phase 2)
+  - Binary operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`
+  - Unary operators: `-x`, `+x`
+  - Python-compatible operator precedence and associativity
+  - Right-associative exponentiation: `2**3**2 == 512`
+  - Unary minus follows Python convention: `-3**2 == -9`
+  - Parenthesized sub-expressions: `(2 + 3) * 4 == 20`
+  - Arithmetic inside function arguments: `pow(2 + 1, 2) == 9`
+- **Expression validation ("compile" phase)**
+  - `validate_expression()` checks function existence and arity before evaluation
+  - Catches unknown functions and argument count mismatches before iteration
+  - Integrated into CLI between parse and evaluation steps
+- **`BinaryOp` and `UnaryOp` AST classes** for arithmetic expression representation
+- **Documentation**: Arithmetic operators section, precedence table, behavioral notes, limitations table
+- 77 new tests (170 grammar tests total, 644 total) — zero regressions
+
+### Changed
+- Grammar replaced flat `term` rule with layered precedence hierarchy using Lark `?` prefix
+- `find_free_variables()` handles BinaryOp and UnaryOp nodes
+- `ExpressionEvaluator` uses `operator` module dispatch tables for arithmetic
+
+### Technical Notes
+- Grammar uses `?`-prefixed rules for transparent single-child passthrough (idiomatic Lark)
+- Precedence order (lowest to highest): `+/-` → `*////%` → unary `-/+` → `**` → atoms
+- Division by zero raises `EvaluationError` with clear message
+- `mod_op` rule name avoids conflict with existing `mod()` function
+
+### Documented Limitations
+- Implicit multiplication (`2x`) — use `2 * x`
+- Scientific notation (`1.5e10`) — use `1.5 * pow(10, 10)`
+- Leading-dot decimals (`.5`) — use `0.5`
+- Chained comparisons (`1 < x < 10`) — use separate expressions
+- Boolean operators (`and`, `or`, `not`) — future work
+- Bitwise operators (`&`, `|`, `^`, `~`) — future work
+- Complex numbers (`3+2j`) — future work, use function wrappers
+
+### Related Issues
+- Issue #44: Extend expression grammar with arithmetic operators (Phase 2 complete)
+- Issue #13: Generalized Expression Grammar (epic)
+
+### Design Documents
+- `2026-02-06__18-04-25__phase2-arithmetic-operators-grammar-extension.md`
+- `2026-02-07__01-03-00__full-postmortem_phase2-arithmetic-operators.md`
+
 ## [0.7.10] - 2026-02-06
 
 ### Added
