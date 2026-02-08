@@ -13,12 +13,20 @@ All notable changes to this project will be documented in this file.
   - `geom_sum_mul_add_one` — division-free geometric series recursion: b * Σ b^i + 1 = Σ b^i over extended range
   - `power_sum_reverse` — descending powers equal ascending via sum_flip
   - `power_sum_closed` — connect descending power sums to Mathlib's `Nat.geomSum_eq` closed form: Σ b^(z-1-i) = (b^z - 1)/(b - 1)
+- **Phase 3D: Telescoping stf'** in TriSum.lean
+  - `rowValue'_zero`, `rowValue'_one` — boundary lemmas for base cases
+  - `sum_rowValue'_succ_eq` — element-wise summed recursive relation over all rows
+  - `rowValue'_sum_index_shift` — index shift bridging 0-indexed Σ rv'(b,z) with 1-indexed stf'
+  - `stf'_telescope` — **main result**: stf'(b) + C + b·rv'(b,r) = b·stf'(b) + B, additive form avoids all Nat subtraction underflow. Reduces stf to boundary term rv'(b,r), correction sum C, and boundary sum B.
   - Bounded `native_decide` verifications for all new theorems
-- Updated `proofs/README.md` with Phase 3B and 3C theorem documentation
+- Updated docstrings on `qg`, `rowValue`, `stf` with terminology notes (stf = Sum of Triangular Factors, qg = inverse triangular function)
+- Updated `proofs/README.md` with Phase 3C and 3D theorem documentation
 
 ### Design Documents
 - `2026-02-08__06-49-01__DISCUSS_Rnd3_FINAL_ASSESSMENT_rowValue-recursive-relation.md` — collaborate2 final assessment for recursive relation strategy
 - `2026-02-08__07-31-00__full-postmortem_phase-3c-algebraic-decomposition-recursive-relation.md` — Phase 3C postmortem
+- `2026-02-08__10-00-17__dev-workflow_phase3d-closed-form-stf-pathway.md` — Phase 3D pathway analysis
+- `2026-02-08__12-13-07__full-postmortem_phase3d-telescoping-stf-and-remaining-roadmap.md` — Phase 3D postmortem and remaining roadmap
 
 ## [0.7.16] - 2026-02-07
 

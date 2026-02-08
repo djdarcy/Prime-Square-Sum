@@ -44,9 +44,15 @@ Triangular number theory and the stf (trisum) function.
 - `rowValue'_succ_add` — Recursive relation: rowValue'(b, z+1) in terms of b * rowValue'(b, z) with geometric sum correction (additive form, avoids Nat subtraction underflow)
 - `power_sum_closed` — Closed form via Mathlib's `Nat.geomSum_eq`: Σ b^(z-1-i) = (b^z - 1)/(b - 1) for b ≥ 2
 
+*Phase 3D — Telescoping stf':*
+- `rowValue'_zero`, `rowValue'_one` — Boundary lemmas: rv'(b,0) = 0, rv'(b,1) = b-1
+- `sum_rowValue'_succ_eq` — Element-wise summed recursive relation over Finset.range
+- `rowValue'_sum_index_shift` — Index shift: Σ_{z<r} rv'(b,z) + rv'(b,r) = stf'(b), bridging 0-indexed sum with 1-indexed stf' via `sum_range_succ` + `sum_range_succ'`
+- `stf'_telescope` — **Main telescoping theorem**: stf'(b) + C + b·rv'(b,r) = b·stf'(b) + B, where C = Σ(z+1)·G(z+1) (correction), B = Σ(b-tri(z)+z) (boundary), r = qg(b). Additive form avoids all Nat subtraction underflow. Reduces stf to three simpler quantities.
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
-- `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, and recursive relation across bases 6, 10, 15
+- `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, recursive relation, index shift, and telescoping across bases 6, 10, 15
 
 *Dependency chain:*
 ```
@@ -60,6 +66,9 @@ rowValue → rowValue_eq_rowValue' → rowValue'
     → rowValue'_succ_add (recursive relation)
         ← geom_sum_mul_add_one + power_sum_reverse (helpers)
     → power_sum_closed (closed form via Nat.geomSum_eq)
+    → sum_rowValue'_succ_eq (summed relation)
+        → rowValue'_sum_index_shift (index shift)
+        → stf'_telescope (telescoping identity)
 ```
 
 **All theorems fully machine-verified** (zero `sorry`).

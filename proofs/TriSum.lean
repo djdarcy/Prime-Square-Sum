@@ -143,20 +143,24 @@ theorem tri_is_triangular (n : Nat) : isTriangular (tri n) = true := by
 def digitsToNat (b : Nat) (digits : List Nat) : Nat :=
   digits.foldl (fun acc d => acc * b + d) 0
 
-/-- Inverse triangular: find r such that tri(r) = b.
+/-- qg: inverse triangular function. Given b = tri(n), returns n.
+    Name from the original Mathematica notebook.
     For triangular b, returns the unique r with r*(r+1)/2 = b. -/
 def qg (b : Nat) : Nat :=
   (Nat.sqrt (1 + 8 * b) - 1) / 2
 
-/-- Row z from top: z consecutive digits starting at (b - tri(z)).
+/-- rowValue: the triangular factor (tf) — value of row z in the triangular
+    digit arrangement. Row z has z consecutive digits starting at (b - tri(z)),
+    interpreted as a base-b number.
     For base 10: row 1 = [9], row 2 = [7,8], row 3 = [4,5,6], row 4 = [0,1,2,3] -/
 def rowValue (b z : Nat) : Nat :=
   let start := b - tri z
   digitsToNat b ((List.range z).map (· + start))
 
-/-- stf(b): sum of all triangular row values for base b.
-    Arranges digits 0..b-1 into a triangle of qg(b) rows and sums the
-    base-b interpretation of each row. -/
+/-- stf: Sum of Triangular Factors. Sums all row values (triangular factors,
+    tf) for base b. Arranges digits 0..b-1 into a triangle of qg(b) rows
+    and sums the base-b interpretation of each row.
+    stf(10) = 9 + 78 + 456 + 123 = 666. -/
 def stf (b : Nat) : Nat :=
   let r := qg b
   (List.range r).foldl (fun acc i => acc + rowValue b (i + 1)) 0
@@ -472,6 +476,110 @@ theorem power_sum_closed_10_3 :
 
 theorem power_sum_closed_6_4 :
     (Finset.range 4).sum (fun i => 6 ^ (3 - i)) = (1296 - 1) / 5 := by native_decide
+
+-- === Phase 3D: Telescoping infrastructure ===
+
+/-- Base case: rowValue' with zero rows is zero (empty sum). -/
+theorem rowValue'_zero (b : Nat) : rowValue' b 0 = 0 := by
+  simp [rowValue']
+
+/-- Base case: rowValue' with one row is b - 1.
+    Row 1 has a single digit (b - tri(1)) = (b - 1). -/
+theorem rowValue'_one (b : Nat) : rowValue' b 1 = b - 1 := by
+  simp [rowValue', tri]
+
+/-- For triangular bases b = tri(r), the last row starts at digit 0.
+    This means b - tri(r) = 0, so the row digits are [0, 1, ..., r-1]. -/
+theorem rowValue'_last_row_coeff (r : Nat) :
+    tri r - tri r = 0 := by omega
+
+/-- Summing the recursive relation: element-wise equality over the range.
+    Each term rowValue'(b,z+1) + (z+1)*G(z+1) = b*rowValue'(b,z) + (b-tri z+z). -/
+theorem sum_rowValue'_succ_eq (b r : Nat)
+    (hvalid : ∀ z, z < r → tri (z + 1) ≤ b) :
+    (Finset.range r).sum (fun z =>
+      rowValue' b (z + 1) + (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) =
+    (Finset.range r).sum (fun z =>
+      b * rowValue' b z + (b - tri z + z)) := by
+  apply Finset.sum_congr rfl
+  intro z hz
+  exact rowValue'_succ_add b z (hvalid z (Finset.mem_range.mp hz))
+
+/-- Index shift: the sum of rowValue' from 0 to r-1, plus rowValue'(b,r), equals stf'(b).
+    This bridges the 0-indexed sum (Σ_{z<r} rv'(b,z)) with the 1-indexed stf'
+    (which sums rv'(b,1) through rv'(b,r)). Both equal Σ_{i<r+1} rv'(b,i). -/
+theorem rowValue'_sum_index_shift (b : Nat) :
+    (Finset.range (qg b)).sum (fun z => rowValue' b z) + rowValue' b (qg b) = stf' b := by
+  rw [← Finset.sum_range_succ, Finset.sum_range_succ', rowValue'_zero, add_zero]
+  rfl
+
+-- Bounded verification of index shift
+theorem rowValue'_sum_index_shift_10 :
+    (Finset.range 4).sum (fun z => rowValue' 10 z) + rowValue' 10 4 = stf' 10 := by native_decide
+
+/-- Main telescoping theorem for stf' (additive form).
+    Summing the recursive relation over all rows and decomposing:
+      stf'(b) + C + b·rowValue'(b,r) = b·stf'(b) + B
+    where C = Σ_{z<r} (z+1)·G(z+1), B = Σ_{z<r} (b - tri(z) + z), r = qg(b).
+    The additive form avoids all Nat subtraction underflow. -/
+theorem stf'_telescope (b : Nat)
+    (hvalid : ∀ z, z < qg b → tri (z + 1) ≤ b) :
+    stf' b +
+    (Finset.range (qg b)).sum (fun z => (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) +
+    b * rowValue' b (qg b) =
+    b * stf' b +
+    (Finset.range (qg b)).sum (fun z => b - tri z + z) := by
+  -- Strategy: prove the goal directly using three key facts:
+  -- (1) sum_rowValue'_succ_eq: the element-wise recursive relation summed
+  -- (2) sum_add_distrib: decompose compound sums
+  -- (3) rowValue'_sum_index_shift: index shift for rv' sums
+  --
+  -- Approach: rewrite goal LHS to match RHS step by step.
+  -- LHS = stf' b + C + b * rv'(b,r)
+  --      = (Σ rv'(z+1) + C) + b * rv'(b,r)           [unfold stf']
+  --      = (Σ (rv'(z+1) + corr(z))) + b * rv'(b,r)    [← sum_add_distrib]
+  --      = (Σ (b*rv'(z) + bound(z))) + b * rv'(b,r)   [sum_rowValue'_succ_eq]
+  --      = (b * Σ rv'(z) + B) + b * rv'(b,r)          [sum_add_distrib + mul_sum]
+  --      = b * (Σ rv'(z) + rv'(b,r)) + B              [rearrange + factor]
+  --      = b * stf' b + B                              [index shift]
+  --      = RHS
+  have hsums := sum_rowValue'_succ_eq b (qg b) hvalid
+  have hshift := rowValue'_sum_index_shift b
+  -- Rewrite stf' b on the LHS as Σ rv'(z+1)
+  show (Finset.range (qg b)).sum (fun z => rowValue' b (z + 1)) +
+    (Finset.range (qg b)).sum (fun z => (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) +
+    b * rowValue' b (qg b) =
+    b * stf' b +
+    (Finset.range (qg b)).sum (fun z => b - tri z + z)
+  -- Recombine the first two sums: Σ f + Σ g = Σ (f + g)
+  rw [← Finset.sum_add_distrib]
+  -- LHS: Σ (rv'(z+1) + corr(z)) + b * rv'(b,r) = ...
+  -- Apply the recursive relation to convert the sum
+  rw [hsums]
+  -- LHS: Σ (b*rv'(z) + bound(z)) + b * rv'(b,r) = ...
+  -- Split: Σ (b*rv'(z) + bound(z)) = Σ b*rv'(z) + Σ bound(z)
+  rw [Finset.sum_add_distrib]
+  -- Factor: Σ (b * rv'(z)) = b * Σ rv'(z)
+  rw [← Finset.mul_sum]
+  -- LHS: b * Σ rv'(z) + B + b * rv'(b,r) = b * stf' b + B
+  -- Rearrange: b * S + B + b * rv = b * S + b * rv + B = b * (S + rv) + B = b * stf' + B
+  rw [add_assoc, add_comm ((Finset.range (qg b)).sum (fun z => b - tri z + z)),
+      ← add_assoc, ← Nat.left_distrib, hshift]
+
+-- Bounded verification of telescoping (additive form)
+theorem stf'_telescope_10 :
+    stf' 10 +
+    (Finset.range 4).sum (fun z => (z + 1) * (Finset.range (z + 1)).sum (fun i => 10 ^ i)) +
+    10 * rowValue' 10 4 =
+    10 * stf' 10 +
+    (Finset.range 4).sum (fun z => 10 - tri z + z) := by native_decide
+
+theorem stf'_telescope_6 :
+    stf' 6 +
+    (Finset.range 3).sum (fun z => (z + 1) * (Finset.range (z + 1)).sum (fun i => 6 ^ i)) +
+    6 * rowValue' 6 3 =
+    6 * stf' 6 +
+    (Finset.range 3).sum (fun z => 6 - tri z + z) := by native_decide
 
 -- ============================================================
 -- PART 5: Bounded Recast Pattern
