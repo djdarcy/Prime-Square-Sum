@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.16] - 2026-02-07
+
+### Added
+- **Phase 3B: Bridge lemma and algebraic rowValue** in TriSum.lean (Part 4b)
+  - `rowValue'` — algebraic Finset.sum definition with positional powers
+  - `digitsToNat_eq_ofDigits_reverse` — connects big-endian foldl to Mathlib's little-endian `ofDigits` via `List.reverse`
+  - `digitsToNat_arith_seq` — core bridge lemma: foldl over arithmetic sequence [c, c+1, ..., c+z-1] equals Finset.sum with positional weights, proved by induction on z
+  - `rowValue_eq_rowValue'` — general equivalence between algorithmic and algebraic rowValue (no sorry)
+  - Bounded verification via `native_decide` for bases 6, 10, 15
+  - Helper lemmas: `digitsToNat_append_single`, `range_map_succ`
+- Bridge lemma Python verification script (`tests/one-offs/thinking/2026-02-07__bridge-lemma-verification.py`)
+
+### Design Documents
+- `2026-02-07__17-11-30__dev-workflow_phase3b-bridge-lemma-rowvalue-algebraic.md` — analysis for Phase 3B approach
+
 ## [0.7.15] - 2026-02-07
 
 ### Added

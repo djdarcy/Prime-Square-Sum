@@ -13,6 +13,7 @@
   2. Recursive and inductive proofs (tri_succ, two_mul_tri)
   3. Triangular recognition correctness (tri_is_triangular)
   4. stf: sum of triangular digit rows (digitsToNat, qg, rowValue, stf)
+  4b. Algebraic rowValue and bridge lemma (rowValue' ↔ rowValue via Finset.sum)
   5. Bounded recast pattern (uses recast from Digits.lean)
   6. Deep triangular structure
   7. Synthesis — composition theorems
@@ -21,6 +22,9 @@
 import Mathlib.Data.Nat.Sqrt
 import Mathlib.Tactic.Ring
 import Mathlib.Algebra.Ring.Parity
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Nat.Digits.Lemmas
 import Digits
 
 -- ============================================================
@@ -171,6 +175,101 @@ theorem row4_base10 : rowValue 10 4 = 123 := by native_decide
 theorem stf_ten : stf 10 = 666 := by native_decide
 
 -- ============================================================
+-- PART 4b: Algebraic rowValue and Bridge Lemma
+-- ============================================================
+
+-- The algebraic form expresses rowValue as a positional-weight sum:
+--   rowValue'(b, z) = Σ_{i=0}^{z-1} (b - tri(z) + i) * b^(z-1-i)
+-- This is equivalent to the algorithmic foldl definition (rowValue).
+-- The bridge lemma proves this equivalence generally by induction.
+
+/-- Algebraic rowValue: closed-form Finset.sum with positional powers.
+    Equivalent to rowValue but amenable to algebraic manipulation. -/
+def rowValue' (b z : Nat) : Nat :=
+  (Finset.range z).sum (fun i => (b - tri z + i) * b ^ (z - 1 - i))
+
+-- Verify algebraic rowValue matches algorithmic for base 10
+#eval rowValue' 10 1  -- 9
+#eval rowValue' 10 2  -- 78
+#eval rowValue' 10 3  -- 456
+#eval rowValue' 10 4  -- 123
+
+-- === Mathlib connection: digitsToNat = ofDigits via reverse ===
+
+/-- Our big-endian foldl equals Mathlib's little-endian ofDigits on the reversed list. -/
+theorem digitsToNat_eq_ofDigits_reverse (b : Nat) (L : List Nat) :
+    digitsToNat b L = Nat.ofDigits b L.reverse := by
+  unfold digitsToNat
+  rw [Nat.ofDigits_eq_foldr]
+  conv_lhs => rw [← List.reverse_reverse L]
+  rw [List.foldl_reverse]
+  congr 1
+  ext d acc
+  push_cast
+  ring
+
+-- === Bridge lemma helpers ===
+
+/-- foldl over appended singleton: digitsToNat of L++[d] = digitsToNat(L)*b + d -/
+theorem digitsToNat_append_single (b : Nat) (L : List Nat) (d : Nat) :
+    digitsToNat b (L ++ [d]) = digitsToNat b L * b + d := by
+  unfold digitsToNat
+  rw [List.foldl_append]
+  simp [List.foldl]
+
+/-- List.range (z+1) mapped = List.range z mapped ++ [c + z] -/
+theorem range_map_succ (c z : Nat) :
+    (List.range (z + 1)).map (· + c) = (List.range z).map (· + c) ++ [c + z] := by
+  rw [List.range_succ, List.map_append, List.map_singleton, Nat.add_comm z c]
+
+-- === The core bridge lemma ===
+
+/-- Core bridge: digitsToNat of an arithmetic sequence [c, c+1, ..., c+z-1]
+    equals the positional-weight Finset.sum.
+    Proved by induction on z, using foldl append and power properties. -/
+theorem digitsToNat_arith_seq (b c z : Nat) :
+    digitsToNat b ((List.range z).map (· + c)) =
+    (Finset.range z).sum (fun i => (c + i) * b ^ (z - 1 - i)) := by
+  induction z with
+  | zero =>
+    simp [digitsToNat, List.range_zero, List.map_nil]
+  | succ n ih =>
+    rw [range_map_succ, digitsToNat_append_single]
+    rw [Finset.sum_range_succ]
+    have hn : n + 1 - 1 - n = 0 := by omega
+    rw [hn, pow_zero, mul_one]
+    -- n+1-1-x is defeq to n-x, so the sum exponents simplify automatically
+    congr 1
+    rw [ih, Finset.sum_mul]
+    apply Finset.sum_congr rfl
+    intro i hi
+    have hi' : i < n := Finset.mem_range.mp hi
+    rw [mul_assoc, ← pow_succ]
+    congr 1  -- (c+i) = (c+i), reduces to b^(n-1-i+1) = b^(n+1-1-i)
+    congr 1  -- reduces to n-1-i+1 = n+1-1-i
+    omega
+
+-- === General bridge: rowValue = rowValue' ===
+
+/-- The algorithmic rowValue (foldl-based) equals the algebraic rowValue' (Finset.sum).
+    This bridges the computable definition to a form amenable to algebraic proof. -/
+theorem rowValue_eq_rowValue' (b z : Nat) :
+    rowValue b z = rowValue' b z := by
+  unfold rowValue rowValue'
+  exact digitsToNat_arith_seq b (b - tri z) z
+
+-- Bounded verification: rowValue = rowValue' for specific bases
+theorem rv_eq_rv'_10_1 : rowValue 10 1 = rowValue' 10 1 := by native_decide
+theorem rv_eq_rv'_10_2 : rowValue 10 2 = rowValue' 10 2 := by native_decide
+theorem rv_eq_rv'_10_3 : rowValue 10 3 = rowValue' 10 3 := by native_decide
+theorem rv_eq_rv'_10_4 : rowValue 10 4 = rowValue' 10 4 := by native_decide
+theorem rv_eq_rv'_6_1 : rowValue 6 1 = rowValue' 6 1 := by native_decide
+theorem rv_eq_rv'_6_2 : rowValue 6 2 = rowValue' 6 2 := by native_decide
+theorem rv_eq_rv'_6_3 : rowValue 6 3 = rowValue' 6 3 := by native_decide
+theorem rv_eq_rv'_15_1 : rowValue 15 1 = rowValue' 15 1 := by native_decide
+theorem rv_eq_rv'_15_5 : rowValue 15 5 = rowValue' 15 5 := by native_decide
+
+-- ============================================================
 -- PART 5: Bounded Recast Pattern
 -- ============================================================
 
@@ -310,7 +409,15 @@ theorem deep_tri_n4_triangular : isTriangular (tri (tri 8)) = true :=
      Tri[Tri[4]] = 55 (n=3 case)
      Tri[Tri[8]] = 666 (n=4 case)
 
+  9. Algebraic bridge (Phase 3B):
+     rowValue' — algebraic Finset.sum form of rowValue
+     digitsToNat_eq_ofDigits_reverse — connects to Mathlib's ofDigits
+     digitsToNat_arith_seq — core bridge: foldl arithmetic seq = Finset.sum
+     rowValue_eq_rowValue' — general equivalence (no sorry!)
+     Bounded verification for bases 6, 10, 15
+
   Open for future work:
+  - Recursive relation: rowValue'(b, z+1) from rowValue'(b, z)
   - Closed-form Q(b,z) polynomial and equivalence with rowValue
   - Why the recast pattern breaks at n=5
   - Connection to φ = (1 + √5)/2
