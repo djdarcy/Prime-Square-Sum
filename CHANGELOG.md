@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.18] - 2026-02-08
+
+### Added
+- **Complex number support** via function-first approach (Issue #54, Phase 1)
+  - `complex(real, imag)` — create complex numbers (`complex(3, 4)` = 3+4j)
+  - `real(z)` — extract real part (`real(complex(3, 4))` = 3)
+  - `imag(z)` — extract imaginary part (`imag(complex(3, 4))` = 4)
+  - `conj(z)` — complex conjugate (`conj(complex(3, 4))` = 3-4j)
+  - All registered in `pss` namespace, accessible qualified (`pss.complex`) or unqualified
+- `sqrt()` now handles complex inputs via `cmath.sqrt()`
+- `abs()` works with complex numbers (returns magnitude: `abs(complex(3, 4))` = 5)
+- Arithmetic operators (`+`, `-`, `*`, `/`, `**`) work with complex values
+- `TypeError` handling in evaluator for unsupported operations (e.g., `//` on complex, ordering comparisons)
+- 32 new tests (14 function registry + 18 grammar integration) — 759 total, zero regressions
+
+### Changed
+- `_builtin_sqrt` checks for complex input before negative check, delegates to `cmath.sqrt()`
+- `_binary_op` catches `TypeError` with clear error message for unsupported type combinations
+- `_compare` catches `TypeError` for ordering operators (`<`, `>`, `<=`, `>=`) on complex numbers
+- Updated `docs/expressions.md`: complex functions in PSS table, literal syntax noted as future work
+
 ## [0.7.17] - 2026-02-07
 
 ### Fixed

@@ -2186,3 +2186,121 @@ class TestPhase3Integration:
         matches = list(find_matches(expr, evaluator, {"n": 100}))
         assert len(matches) == 1
         assert matches[0]["n"] == 7
+
+
+# =============================================================================
+# Complex Number Tests (Issue #54, Phase 1)
+# =============================================================================
+
+class TestComplexNumbers:
+    """Tests for complex number support via function-first approach."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def _verify(self, parser, evaluator, expr_str):
+        """Helper: parse and evaluate a verify expression, return comparison result."""
+        ast = parser.parse(expr_str)
+        return evaluator.evaluate(ast.body, {})
+
+    # --- Basic function tests ---
+
+    def test_complex_creation(self, parser, evaluator):
+        """complex(3, 4) creates a non-zero complex number."""
+        assert self._verify(parser, evaluator, "verify complex(3, 4) != 0")
+
+    def test_complex_real(self, parser, evaluator):
+        """real() extracts the real part."""
+        assert self._verify(parser, evaluator, "verify real(complex(3, 4)) == 3")
+
+    def test_complex_imag(self, parser, evaluator):
+        """imag() extracts the imaginary part."""
+        assert self._verify(parser, evaluator, "verify imag(complex(3, 4)) == 4")
+
+    def test_complex_conjugate(self, parser, evaluator):
+        """conj() returns the complex conjugate."""
+        assert self._verify(parser, evaluator,
+                            "verify conj(complex(3, 4)) == complex(3, -4)")
+
+    def test_complex_abs_magnitude(self, parser, evaluator):
+        """abs() returns magnitude: |3+4i| = 5."""
+        assert self._verify(parser, evaluator, "verify abs(complex(3, 4)) == 5")
+
+    # --- Arithmetic with complex ---
+
+    def test_complex_addition(self, parser, evaluator):
+        """(1+2i) + (3+4i) = (4+6i)."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(1, 2) + complex(3, 4) == complex(4, 6)")
+
+    def test_complex_subtraction(self, parser, evaluator):
+        """(3+4i) - (1+2i) = (2+2i)."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(3, 4) - complex(1, 2) == complex(2, 2)")
+
+    def test_complex_multiplication(self, parser, evaluator):
+        """(1+2i) * (3+4i) = (3+4+6i+8i^2) = (-5+10i)."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(1, 2) * complex(3, 4) == complex(-5, 10)")
+
+    def test_complex_conjugate_product(self, parser, evaluator):
+        """z * conj(z) = |z|^2 = real number."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(1, 2) * conj(complex(1, 2)) == 5")
+
+    def test_complex_power_i_squared(self, parser, evaluator):
+        """i^2 = -1."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(0, 1) ** 2 == -1")
+
+    # --- Equality and comparison ---
+
+    def test_complex_equality(self, parser, evaluator):
+        """Two identical complex numbers are equal."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(3, 4) == complex(3, 4)")
+
+    def test_complex_inequality(self, parser, evaluator):
+        """Different complex numbers are not equal."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(3, 4) != complex(4, 3)")
+
+    def test_complex_ordering_error(self, parser, evaluator):
+        """Ordering comparisons on complex numbers raise EvaluationError."""
+        ast = parser.parse("verify complex(1, 2) < complex(3, 4)")
+        with pytest.raises(EvaluationError, match="Cannot compare"):
+            evaluator.evaluate(ast.body, {})
+
+    # --- Edge cases ---
+
+    def test_complex_real_of_real_number(self, parser, evaluator):
+        """real() on a non-complex number returns the value itself."""
+        assert self._verify(parser, evaluator, "verify real(5) == 5")
+
+    def test_complex_imag_of_real_number(self, parser, evaluator):
+        """imag() on a non-complex number returns 0."""
+        assert self._verify(parser, evaluator, "verify imag(5) == 0")
+
+    def test_complex_default_imag(self, parser, evaluator):
+        """complex(5) with default imaginary part = 5+0i."""
+        assert self._verify(parser, evaluator, "verify complex(5) == 5")
+
+    def test_complex_division(self, parser, evaluator):
+        """(1+0i) / (0+1i) = (0-1i) = -i."""
+        assert self._verify(parser, evaluator,
+                            "verify complex(1, 0) / complex(0, 1) == complex(0, -1)")
+
+    def test_complex_floordiv_error(self, parser, evaluator):
+        """Floor division on complex raises EvaluationError."""
+        ast = parser.parse("verify complex(1, 2) // 1 == 0")
+        with pytest.raises(EvaluationError, match="Unsupported operation"):
+            evaluator.evaluate(ast.body, {})

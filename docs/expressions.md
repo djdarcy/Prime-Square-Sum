@@ -254,6 +254,10 @@ Available namespaces: `pss` (tool-specific), `math` (Python math module), `user`
 | `factorial(n)` | n! | `factorial(5) = 120` |
 | `catalan(n)` | nth Catalan number | `catalan(5) = 42` |
 | `digital_root(x)` | Digital root | `digital_root(666) = 9` |
+| `complex(real, imag)` | Create complex number | `complex(3, 4)` = 3+4j |
+| `real(z)` | Real part of complex | `real(complex(3, 4))` = 3 |
+| `imag(z)` | Imaginary part of complex | `imag(complex(3, 4))` = 4 |
+| `conj(z)` | Complex conjugate | `conj(complex(3, 4))` = 3-4j |
 
 **Math functions** (all Python `math` module functions available via `math.*`):
 
@@ -407,7 +411,7 @@ These features are not currently supported in the expression grammar. Most can b
 | Implicit multiplication (`2x`) | Write `2 * x` |
 | Scientific notation (`1.5e10`) | Use `1.5 * pow(10, 10)` |
 | Leading-dot decimals (`.5`) | Write `0.5` |
-| Complex numbers (`3+2j`) | Future work — use `complex(a, b)` function |
+| Complex literal syntax (`3+2j`) | Use `complex(3, 2)` function instead |
 | Assignment (`x = 3 + 2`) | Use `--equation` with parameters |
 | `xor` as variable name | Reserved — use a different name |
 

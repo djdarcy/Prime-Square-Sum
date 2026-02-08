@@ -694,6 +694,8 @@ class ExpressionEvaluator:
             return self._BINARY_OPS[op](left, right)
         except (OverflowError, ValueError) as e:
             raise EvaluationError(f"Arithmetic error: {left} {op} {right} -- {e}")
+        except TypeError as e:
+            raise EvaluationError(f"Unsupported operation: {left} {op} {right} -- {e}")
 
     def _unary_op(self, op: str, operand: Any) -> Any:
         """Perform a unary operation."""
@@ -718,7 +720,12 @@ class ExpressionEvaluator:
         }
         if op not in ops:
             raise EvaluationError(f"Unknown comparison operator: '{op}'")
-        return ops[op](left, right)
+        try:
+            return ops[op](left, right)
+        except TypeError as e:
+            raise EvaluationError(
+                f"Cannot compare with '{op}': {left}, {right} -- {e}"
+            )
 
 
 # =============================================================================
