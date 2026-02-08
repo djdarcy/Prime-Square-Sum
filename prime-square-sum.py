@@ -284,7 +284,7 @@ Comparison operators: ==, !=, <, >, <=, >=
 # Expression Handler
 # =============================================================================
 
-def handle_expression(args, registry: FunctionRegistry) -> int:
+def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
     """Handle expression evaluation."""
     start_time = time.time()
 
@@ -299,8 +299,11 @@ def handle_expression(args, registry: FunctionRegistry) -> int:
         print(f"Expression: {expr_str}")
         print()
 
-    # Parse expression
-    parser = ExpressionParser()
+    # Parse expression (Issue #54, Phase 2: configurable imaginary suffixes)
+    imag_patterns = {'ii': '[iI][iI]', 'i': '[iI]', 'j': '[jJ]', 'both': '[iIjJ]', 'none': ''}
+    imag_unit = config.imaginary_unit if config else 'none'
+    suffix_pattern = imag_patterns.get(imag_unit, '[iI][iI]')
+    parser = ExpressionParser(imaginary_suffix_pattern=suffix_pattern)
     try:
         ast = parser.parse(expr_str)
     except ParseError as e:
@@ -492,7 +495,7 @@ def main():
             "  --lhs \"primesum(n,3)\" --target 666"
         )
 
-    return handle_expression(args, registry)
+    return handle_expression(args, registry, config)
 
 
 if __name__ == "__main__":

@@ -411,9 +411,38 @@ These features are not currently supported in the expression grammar. Most can b
 | Implicit multiplication (`2x`) | Write `2 * x` |
 | Scientific notation (`1.5e10`) | Use `1.5 * pow(10, 10)` |
 | Leading-dot decimals (`.5`) | Write `0.5` |
-| Complex literal syntax (`3+2j`) | Use `complex(3, 2)` function instead |
 | Assignment (`x = 3 + 2`) | Use `--equation` with parameters |
 | `xor` as variable name | Reserved — use a different name |
+
+## Imaginary Literals (Opt-in)
+
+Complex numbers can optionally be written using imaginary literal notation (v0.7.19+). This feature is **disabled by default** — use `complex()` for complex number creation without configuration.
+
+To enable, set `imaginary_unit` in `config.json`:
+
+```json
+{ "imaginary_unit": "ii" }
+```
+
+Then use imaginary literals in expressions:
+
+```bash
+python prime-square-sum.py --expr "verify abs(3 + 4ii) == 5"        # magnitude
+python prime-square-sum.py --expr "verify 1ii ** 2 == -1"           # i^2 = -1
+python prime-square-sum.py --expr "verify real(3 + 4ii) == 3"
+```
+
+### Suffix options
+
+| Value | Suffix | Example | Notes |
+|-------|--------|---------|-------|
+| `"none"` (default) | *(disabled)* | Use `complex(3, 2)` | All letters available as variables |
+| `"ii"` | `ii` | `3 + 2ii` | Safe — `i`, `j` remain variables |
+| `"i"` | `i` | `3 + 2i` | Math convention — reserves `i` in `NUMBER+i` |
+| `"j"` | `j` | `3 + 2j` | Python/EE convention — reserves `j` in `NUMBER+j` |
+| `"both"` | `i` or `j` | `3 + 2i` or `3 + 2j` | Reserves both in `NUMBER+suffix` |
+
+Imaginary literals require a leading digit: `2ii` is imaginary, but standalone `ii` is always a variable. The `complex()` function works regardless of this setting.
 
 ## See Also
 

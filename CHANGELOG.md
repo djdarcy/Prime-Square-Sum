@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.19] - 2026-02-08
+
+### Added
+- **Imaginary literal syntax** for complex numbers (Issue #54, Phase 2)
+  - Opt-in via `config.json`: `"imaginary_unit": "ii"` enables `3 + 4ii` = `complex(3, 4)`
+  - Disabled by default — `complex()` function is the canonical approach
+  - Supports `ii`, `i`, `j`, `both`, or `none` suffix configurations
+  - Float support: `3.5ii` = `complex(0, 3.5)`
+  - Variables `i`, `j`, `k` remain unreserved when disabled or using `ii` suffix
+- Configurable `imaginary_unit` in `config.json`: `"none"` (default), `"ii"`, `"i"`, `"j"`, `"both"`
+- Dynamic grammar construction via `ExpressionParser(imaginary_suffix_pattern=...)`
+- 21 new tests (4 parsing + 9 evaluation + 2 variable preservation + 6 config variants) — 780 total, zero regressions
+
+### Changed
+- `ExpressionParser.__init__()` accepts `imaginary_suffix_pattern` parameter for configurable imaginary literals
+- `ExpressionParser._build_grammar()` conditionally inserts `IMAGINARY` terminal before `NUMBER`
+- `ASTTransformer.literal()` uses `rstrip()` for multi-character suffix handling (e.g., `ii`)
+- `Literal.value` type hint expanded to `Union[int, float, complex]`
+- `handle_expression()` accepts `config` parameter, maps `imaginary_unit` to regex pattern
+- `Config` class gains `imaginary_unit` field (default `'ii'`)
+- Updated `docs/expressions.md`: imaginary literal section with config table, removed complex literal from limitations
+
 ## [0.7.18] - 2026-02-08
 
 ### Added

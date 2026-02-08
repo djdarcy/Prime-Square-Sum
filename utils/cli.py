@@ -727,6 +727,8 @@ class Config:
     algorithms: Dict[str, str] = field(default_factory=dict)
     max_memory_mb: Optional[int] = None
     prefer: Optional[str] = None
+    # Imaginary literal syntax (Issue #54, Phase 2)
+    imaginary_unit: str = 'none'
 
 
 def find_config_file() -> Optional[Path]:
@@ -782,6 +784,7 @@ def load_config(path: Optional[Path] = None) -> Config:
         algorithms=data.get('algorithms', {}),
         max_memory_mb=data.get('max_memory_mb'),
         prefer=data.get('prefer'),
+        imaginary_unit=data.get('imaginary_unit', 'none'),
     )
 
 

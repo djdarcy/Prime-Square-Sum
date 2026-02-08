@@ -2304,3 +2304,141 @@ class TestComplexNumbers:
         ast = parser.parse("verify complex(1, 2) // 1 == 0")
         with pytest.raises(EvaluationError, match="Unsupported operation"):
             evaluator.evaluate(ast.body, {})
+
+
+# =============================================================================
+# Imaginary Literal Tests (Issue #54, Phase 2)
+# =============================================================================
+
+class TestImaginaryLiterals:
+    """Tests for imaginary literal syntax (e.g. 2ii, 3.5ii).
+
+    Default config is 'none' (disabled). Tests use explicit suffix patterns.
+    Configurable via imaginary_suffix_pattern parameter.
+    """
+
+    @pytest.fixture
+    def parser_ii(self):
+        """Parser with 'ii' suffix ([iI][iI])."""
+        return ExpressionParser(imaginary_suffix_pattern='[iI][iI]')
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    @staticmethod
+    def _verify(parser, evaluator, expr_str):
+        ast = parser.parse(expr_str)
+        return evaluator.evaluate(ast.body, {})
+
+    # --- Parsing tests (with 'ii' suffix enabled) ---
+
+    def test_parse_imaginary_ii(self, parser_ii):
+        """2ii parses to Literal(complex(0, 2))."""
+        ast = parser_ii.parse("verify 2ii == complex(0, 2)")
+        assert isinstance(ast, Expression)
+
+    def test_parse_imaginary_float(self, parser_ii):
+        """3.5ii parses to Literal(complex(0, 3.5))."""
+        ast = parser_ii.parse("verify 3.5ii == complex(0, 3.5)")
+        assert isinstance(ast, Expression)
+
+    def test_parse_imaginary_zero(self, parser_ii):
+        """0ii parses to Literal(complex(0, 0))."""
+        ast = parser_ii.parse("verify 0ii == 0")
+        assert isinstance(ast, Expression)
+
+    def test_parse_imaginary_mixed_case(self, parser_ii):
+        """2iI also works (case-insensitive suffix)."""
+        ast = parser_ii.parse("verify 2iI == complex(0, 2)")
+        assert isinstance(ast, Expression)
+
+    # --- Evaluation tests (with 'ii' suffix enabled) ---
+
+    def test_imaginary_addition(self, parser_ii, evaluator):
+        """3 + 2ii == complex(3, 2)."""
+        assert self._verify(parser_ii, evaluator, "verify 3 + 2ii == complex(3, 2)")
+
+    def test_imaginary_subtraction(self, parser_ii, evaluator):
+        """3 - 2ii == complex(3, -2)."""
+        assert self._verify(parser_ii, evaluator, "verify 3 - 2ii == complex(3, -2)")
+
+    def test_imaginary_negation(self, parser_ii, evaluator):
+        """-2ii == complex(0, -2)."""
+        assert self._verify(parser_ii, evaluator, "verify -2ii == complex(0, -2)")
+
+    def test_imaginary_squared(self, parser_ii, evaluator):
+        """1ii ** 2 == -1 (i^2 = -1)."""
+        assert self._verify(parser_ii, evaluator, "verify 1ii ** 2 == -1")
+
+    def test_imaginary_abs(self, parser_ii, evaluator):
+        """abs(3 + 4ii) == 5 (magnitude)."""
+        assert self._verify(parser_ii, evaluator, "verify abs(3 + 4ii) == 5")
+
+    def test_imaginary_conjugate_product(self, parser_ii, evaluator):
+        """(1 + 2ii) * conj(1 + 2ii) == 5 (z * conj(z) = |z|^2)."""
+        assert self._verify(parser_ii, evaluator,
+                            "verify (1 + 2ii) * conj(complex(1, 2)) == 5")
+
+    def test_imaginary_with_real_extraction(self, parser_ii, evaluator):
+        """real(3 + 4ii) == 3."""
+        assert self._verify(parser_ii, evaluator, "verify real(3 + 4ii) == 3")
+
+    def test_imaginary_with_imag_extraction(self, parser_ii, evaluator):
+        """imag(3 + 4ii) == 4."""
+        assert self._verify(parser_ii, evaluator, "verify imag(3 + 4ii) == 4")
+
+    def test_imaginary_multiplication(self, parser_ii, evaluator):
+        """1ii * 1ii == -1 (i * i = -1)."""
+        assert self._verify(parser_ii, evaluator, "verify 1ii * 1ii == -1")
+
+    # --- Variable name preservation (with 'ii' suffix enabled) ---
+
+    def test_variable_i_still_works(self, parser_ii, evaluator):
+        """Standalone 'i' is a variable, not imaginary (even with ii suffix)."""
+        ast = parser_ii.parse("does_exist i == 5")
+        matches = list(find_matches(ast, evaluator, {'i': 10}))
+        assert 5 in [m['i'] for m in matches]
+
+    def test_variable_ii_still_works(self, parser_ii, evaluator):
+        """Standalone 'ii' is a variable (IMAGINARY requires leading digit)."""
+        ast = parser_ii.parse("does_exist ii == 5")
+        matches = list(find_matches(ast, evaluator, {'ii': 10}))
+        assert 5 in [m['ii'] for m in matches]
+
+    # --- Config variants ---
+
+    def test_single_i_suffix(self, evaluator):
+        """Parser with '[iI]' pattern accepts 2i."""
+        p = ExpressionParser(imaginary_suffix_pattern='[iI]')
+        assert self._verify(p, evaluator, "verify 2i == complex(0, 2)")
+
+    def test_single_j_suffix(self, evaluator):
+        """Parser with '[jJ]' pattern accepts 2j."""
+        p = ExpressionParser(imaginary_suffix_pattern='[jJ]')
+        assert self._verify(p, evaluator, "verify 2j == complex(0, 2)")
+
+    def test_both_suffixes(self, evaluator):
+        """Parser with '[iIjJ]' pattern accepts both 2i and 2j."""
+        p = ExpressionParser(imaginary_suffix_pattern='[iIjJ]')
+        assert self._verify(p, evaluator, "verify 2i == 2j")
+
+    def test_disabled_by_default(self):
+        """Default parser has no IMAGINARY terminal."""
+        p = ExpressionParser()  # default: imaginary_suffix_pattern=''
+        with pytest.raises(ParseError):
+            p.parse("verify 2ii == complex(0, 2)")
+
+    def test_disabled_still_supports_complex_function(self, evaluator):
+        """Default parser still supports complex() function (Phase 1)."""
+        p = ExpressionParser()  # default: disabled
+        assert self._verify(p, evaluator, "verify complex(3, 4) == complex(3, 4)")
+
+    def test_ii_suffix_rejects_single_i(self, parser_ii):
+        """'ii' parser does NOT accept single 'i' suffix (2i)."""
+        with pytest.raises(ParseError):
+            parser_ii.parse("verify 2i == complex(0, 2)")

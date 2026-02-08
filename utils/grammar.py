@@ -46,8 +46,8 @@ class ASTNode(ABC):
 
 @dataclass
 class Literal(ASTNode):
-    """A literal numeric value (int or float)."""
-    value: Union[int, float]
+    """A literal numeric value (int, float, or complex)."""
+    value: Union[int, float, complex]
 
 
 @dataclass
@@ -316,7 +316,12 @@ class ASTTransformer(Transformer):
         return list(terms)
 
     def literal(self, value) -> Literal:
-        v = float(value) if '.' in str(value) else int(value)
+        s = str(value)
+        if s[-1] in 'jJiI':
+            num_str = s.rstrip('iIjJ')
+            num = float(num_str) if '.' in num_str else int(num_str)
+            return Literal(value=complex(0, num))
+        v = float(s) if '.' in s else int(s)
         return Literal(value=v)
 
     def variable(self, name) -> Variable:
@@ -419,14 +424,36 @@ class ExpressionParser:
         ast = parser.parse("does_exist primesum(n,2) == 666")
     """
 
-    def __init__(self):
+    def __init__(self, imaginary_suffix_pattern=''):
         self._postlex = CaretPostLex()
+        grammar = self._build_grammar(imaginary_suffix_pattern)
         self._parser = Lark(
-            GRAMMAR,
+            grammar,
             parser='lalr',
             transformer=ASTTransformer(),
             postlex=self._postlex,
         )
+
+    @staticmethod
+    def _build_grammar(imaginary_suffix_pattern):
+        """Build grammar with configurable imaginary literal support.
+
+        Args:
+            imaginary_suffix_pattern: Regex pattern for imaginary suffix,
+                e.g. '[iI][iI]' for 'ii' (default), '[iI]' for 'i', '' to disable.
+        """
+        if not imaginary_suffix_pattern:
+            return GRAMMAR
+        grammar = GRAMMAR.replace(
+            'literal: NUMBER',
+            'literal: IMAGINARY | NUMBER'
+        )
+        grammar = grammar.replace(
+            'NUMBER: /[0-9]+(\\.[0-9]+)?/',
+            f'IMAGINARY: /[0-9]+(\\.[0-9]+)?{imaginary_suffix_pattern}/\n'
+            f'    NUMBER: /[0-9]+(\\.[0-9]+)?/'
+        )
+        return grammar
 
     def parse(self, text: str) -> Expression:
         """
