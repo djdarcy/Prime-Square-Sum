@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
   - Bounded verification via `native_decide` for bases 6, 10, 15
   - Helper lemmas: `digitsToNat_append_single`, `range_map_succ`
 - Bridge lemma Python verification script (`tests/one-offs/thinking/2026-02-07__bridge-lemma-verification.py`)
+- **Approach B: Alternative bridge proof via Mathlib's `ofDigits`** in BridgeB.lean
+  - `reverse_arith_seq_succ` — reversed arithmetic sequence decomposes as cons
+  - `ofDigits_reversed_arith_seq` — little-endian form: `ofDigits b (reversed seq) = Σ (c+z-1-i)*b^i`, proved by induction using `ofDigits_cons` + `sum_range_succ'`
+  - Bounded `native_decide` verification
+  - Complements Approach A (direct big-endian induction in TriSum.lean); Approach A remains primary for downstream proofs since the big-endian form matches `rowValue'`
 
 ### Design Documents
 - `2026-02-07__17-11-30__dev-workflow_phase3b-bridge-lemma-rowvalue-algebraic.md` — analysis for Phase 3B approach
