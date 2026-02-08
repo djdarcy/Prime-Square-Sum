@@ -208,7 +208,7 @@ theorem digitsToNat_eq_ofDigits_reverse (b : Nat) (L : List Nat) :
   push_cast
   ring
 
--- === Bridge lemma helpers ===
+-- === Bridge lemma helpers (Approach A — kept for reference) ===
 
 /-- foldl over appended singleton: digitsToNat of L++[d] = digitsToNat(L)*b + d -/
 theorem digitsToNat_append_single (b : Nat) (L : List Nat) (d : Nat) :
@@ -222,32 +222,68 @@ theorem range_map_succ (c z : Nat) :
     (List.range (z + 1)).map (· + c) = (List.range z).map (· + c) ++ [c + z] := by
   rw [List.range_succ, List.map_append, List.map_singleton, Nat.add_comm z c]
 
+-- === Approach B infrastructure (ofDigits-based) ===
+
+/-- Reverse of mapped range decomposes as cons (for ofDigits_cons induction). -/
+theorem reverse_arith_seq_succ (c z : Nat) :
+    ((List.range (z + 1)).map (· + c)).reverse =
+    (c + z) :: ((List.range z).map (· + c)).reverse := by
+  rw [List.range_succ, List.map_append, List.map_singleton,
+      List.reverse_append, List.reverse_singleton, List.singleton_append,
+      Nat.add_comm z c]
+
+/-- ofDigits of reversed arithmetic sequence = little-endian Finset.sum.
+    ofDigits b [c+z-1, ..., c] = Σ_{i<z} (c+z-1-i) * b^i -/
+theorem ofDigits_reversed_arith_seq (b c z : Nat) :
+    Nat.ofDigits b ((List.range z).map (· + c)).reverse =
+    (Finset.range z).sum (fun i => (c + z - 1 - i) * b ^ i) := by
+  induction z with
+  | zero => simp
+  | succ n ih =>
+    rw [reverse_arith_seq_succ, Nat.ofDigits_cons, ih, Finset.sum_range_succ, Finset.mul_sum]
+    have h1 : ∀ i ∈ Finset.range n,
+        b * ((c + n - 1 - i) * b ^ i) = (c + n - 1 - i) * b ^ (i + 1) := by
+      intro i _; rw [mul_left_comm, ← pow_succ']
+    rw [Finset.sum_congr rfl h1]
+    have h2 : ∀ i ∈ Finset.range n,
+        (c + (n + 1) - 1 - i) * b ^ i = (c + n - i) * b ^ i := by
+      intro i _; rfl
+    have h3 : (c + (n + 1) - 1 - n) * b ^ n = (c + n - n) * b ^ n := by rfl
+    rw [Finset.sum_congr rfl h2, h3, ← Finset.sum_range_succ]
+    rw [Finset.sum_range_succ' (fun j => (c + n - j) * b ^ j)]
+    simp only [Nat.sub_zero, pow_zero, mul_one]
+    rw [add_comm (c + n)]
+    congr 1
+    apply Finset.sum_congr rfl
+    intro i _
+    congr 1; omega
+
 -- === The core bridge lemma ===
 
 /-- Core bridge: digitsToNat of an arithmetic sequence [c, c+1, ..., c+z-1]
     equals the positional-weight Finset.sum.
-    Proved by induction on z, using foldl append and power properties. -/
+    Proof via Approach B: reverse → ofDigits → little-endian sum → re-index via sum_flip. -/
 theorem digitsToNat_arith_seq (b c z : Nat) :
     digitsToNat b ((List.range z).map (· + c)) =
     (Finset.range z).sum (fun i => (c + i) * b ^ (z - 1 - i)) := by
-  induction z with
-  | zero =>
-    simp [digitsToNat, List.range_zero, List.map_nil]
-  | succ n ih =>
-    rw [range_map_succ, digitsToNat_append_single]
-    rw [Finset.sum_range_succ]
-    have hn : n + 1 - 1 - n = 0 := by omega
-    rw [hn, pow_zero, mul_one]
-    -- n+1-1-x is defeq to n-x, so the sum exponents simplify automatically
+  rw [digitsToNat_eq_ofDigits_reverse, ofDigits_reversed_arith_seq]
+  -- Goal: Σ_{i<z} (c+z-1-i)*b^i = Σ_{i<z} (c+i)*b^(z-1-i)
+  cases z with
+  | zero => simp
+  | succ n =>
+    -- sum_flip: Σ_{r<n+1} f(n-r) = Σ_{k<n+1} f(k)
+    -- Set f(k) = (c+k)*b^(n-k). Then f(n-r) = (c+n-r)*b^r = LHS term.
+    rw [show (Finset.range (n + 1)).sum (fun i => (c + (n + 1) - 1 - i) * b ^ i) =
+            (Finset.range (n + 1)).sum (fun r => (fun k => (c + k) * b ^ (n - k)) (n - r)) from by
+      apply Finset.sum_congr rfl; intro i hi
+      have hi' := Finset.mem_range.mp hi
+      congr 1
+      · omega  -- c + n - i = c + (n - i)
+      · congr 1; omega  -- b^i = b^(n-(n-i)), reduce to i = n-(n-i)
+    ]
+    rw [Finset.sum_flip (fun k => (c + k) * b ^ (n - k))]
+    -- Σ (c+k)*b^(n-k) vs Σ (c+i)*b^(n+1-1-i): kernel normalizes n+1-1-i to n-i
     congr 1
-    rw [ih, Finset.sum_mul]
-    apply Finset.sum_congr rfl
-    intro i hi
-    have hi' : i < n := Finset.mem_range.mp hi
-    rw [mul_assoc, ← pow_succ]
-    congr 1  -- (c+i) = (c+i), reduces to b^(n-1-i+1) = b^(n+1-1-i)
-    congr 1  -- reduces to n-1-i+1 = n+1-1-i
-    omega
 
 -- === General bridge: rowValue = rowValue' ===
 
