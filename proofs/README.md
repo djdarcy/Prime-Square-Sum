@@ -39,9 +39,10 @@ Triangular number theory and the stf (trisum) function.
 *Phase 3C — Algebraic decomposition and recursive relation:*
 - `rowValue'_split` — Decompose rowValue' into constant-coefficient geometric sum plus linearly-weighted power sum
 - `stf'` / `stf_eq_stf'` — Bridge algorithmic stf (List.foldl) to algebraic stf' (Finset.sum)
-- `geom_sum_mul_add` — Division-free geometric series recursion: b * Σ b^i + 1 = Σ b^i over extended range
+- `geom_sum_mul_add_one` — Division-free geometric series recursion: b * Σ b^i + 1 = Σ b^i over extended range
 - `power_sum_reverse` — Descending powers equal ascending powers via sum_flip
 - `rowValue'_succ_add` — Recursive relation: rowValue'(b, z+1) in terms of b * rowValue'(b, z) with geometric sum correction (additive form, avoids Nat subtraction underflow)
+- `power_sum_closed` — Closed form via Mathlib's `Nat.geomSum_eq`: Σ b^(z-1-i) = (b^z - 1)/(b - 1) for b ≥ 2
 
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
@@ -57,7 +58,8 @@ rowValue → rowValue_eq_rowValue' → rowValue'
     → rowValue'_split (decomposition)
     → stf_eq_stf' (algebraic stf bridge)
     → rowValue'_succ_add (recursive relation)
-        ← geom_sum_mul_add + power_sum_reverse (helpers)
+        ← geom_sum_mul_add_one + power_sum_reverse (helpers)
+    → power_sum_closed (closed form via Nat.geomSum_eq)
 ```
 
 **All theorems fully machine-verified** (zero `sorry`).

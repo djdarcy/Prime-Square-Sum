@@ -10,8 +10,9 @@ All notable changes to this project will be documented in this file.
   - `stf'` definition — algebraic Finset.sum form of stf using rowValue'
   - `stf_eq_stf'` — bridge algorithmic stf (List.foldl) to algebraic stf' (Finset.sum), via `list_foldl_add_eq_finset_sum` helper
   - `rowValue'_succ_add` — recursive relation: rowValue'(b, z+1) in terms of b * rowValue'(b, z) with geometric sum correction, additive form avoids Nat subtraction underflow
-  - `geom_sum_mul_add` — division-free geometric series recursion: b * Σ b^i + 1 = Σ b^i over extended range
+  - `geom_sum_mul_add_one` — division-free geometric series recursion: b * Σ b^i + 1 = Σ b^i over extended range
   - `power_sum_reverse` — descending powers equal ascending via sum_flip
+  - `power_sum_closed` — connect descending power sums to Mathlib's `Nat.geomSum_eq` closed form: Σ b^(z-1-i) = (b^z - 1)/(b - 1)
   - Bounded `native_decide` verifications for all new theorems
 - Updated `proofs/README.md` with Phase 3B and 3C theorem documentation
 

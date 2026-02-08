@@ -25,6 +25,7 @@ import Mathlib.Algebra.Ring.Parity
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Nat.Digits.Lemmas
+import Mathlib.Algebra.Ring.GeomSum
 import Digits
 
 -- ============================================================
@@ -367,7 +368,7 @@ theorem stf_eq_stf'_15 : stf 15 = stf' 15 := by native_decide
 
 /-- Geometric sum identity: b * Σ_{i<n} b^i + 1 = Σ_{i<n+1} b^i.
     Division-free form of the standard geometric series recursion. -/
-theorem geom_sum_mul_add (b n : Nat) :
+theorem geom_sum_mul_add_one (b n : Nat) :
     b * (Finset.range n).sum (fun i => b ^ i) + 1 =
     (Finset.range (n + 1)).sum (fun i => b ^ i) := by
   induction n with
@@ -377,7 +378,7 @@ theorem geom_sum_mul_add (b n : Nat) :
         ← pow_succ', add_right_comm, ih]
 
 -- Bounded verification of geometric identity
-theorem geom_sum_mul_add_10_3 :
+theorem geom_sum_mul_add_one_10_3 :
     10 * (1 + 10 + 100) + 1 = 1 + 10 + 100 + 1000 := by norm_num
 
 /-- Power sum reindexing: descending powers equal ascending powers.
@@ -432,7 +433,7 @@ theorem rowValue'_succ_add (b z : Nat) (h : tri (z + 1) ≤ b) :
   -- Step 5: Rewrite descending powers to ascending
   rw [power_sum_reverse b z]
   -- Step 6: Replace Σ_{i<z+1} b^i with b*Σ_{i<z} b^i + 1
-  rw [← geom_sum_mul_add b z]
+  rw [← geom_sum_mul_add_one b z]
   -- Step 7: Distribute and commute
   rw [Nat.mul_add, Nat.mul_one, mul_left_comm (z + 1) b]
   -- Normalize the last-term power: b^(z+1-1-z) = b^0 = 1
@@ -453,6 +454,24 @@ theorem rowValue'_succ_add_10_2 :
 theorem rowValue'_succ_add_6_1 :
     rowValue' 6 2 + 2 * (1 + 6) =
     6 * rowValue' 6 1 + (6 - tri 1 + 1) := by native_decide
+
+-- === Phase 3C/3D: Geometric sum closed-form connection ===
+
+/-- Connect descending power sums to Mathlib's geometric series closed form.
+    Σ_{i<z} b^(z-1-i) = (b^z - 1) / (b - 1) for b ≥ 2.
+    Combines power_sum_reverse with Nat.geomSum_eq. -/
+theorem power_sum_closed (b z : Nat) (hb : 2 ≤ b) :
+    (Finset.range z).sum (fun i => b ^ (z - 1 - i)) =
+    (b ^ z - 1) / (b - 1) := by
+  rw [power_sum_reverse]
+  exact Nat.geomSum_eq hb z
+
+-- Bounded verification of closed-form connection
+theorem power_sum_closed_10_3 :
+    (Finset.range 3).sum (fun i => 10 ^ (2 - i)) = (1000 - 1) / 9 := by native_decide
+
+theorem power_sum_closed_6_4 :
+    (Finset.range 4).sum (fun i => 6 ^ (3 - i)) = (1296 - 1) / 5 := by native_decide
 
 -- ============================================================
 -- PART 5: Bounded Recast Pattern
