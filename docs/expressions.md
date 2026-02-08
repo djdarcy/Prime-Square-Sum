@@ -206,9 +206,11 @@ Context blocks change how ambiguous operators are interpreted:
 
 ```bash
 --expr "verify bit[2^3] + 1 == 2"      # bit context for XOR, then addition in default context
+--expr "verify bit[2 band 3 ^ 4] == 6" # ^ is XOR at correct precedence (level 6)
+--expr "verify bit[2^3] + 2^3 == 9"    # first ^ is XOR (=1), second ^ is power (=8)
 ```
 
-**Note**: Inside `bit[...]`, `^` still parses at exponentiation precedence level. For expressions where this matters, use the `xor` keyword instead or add parentheses.
+Inside `bit[...]`, `^` is parsed at XOR precedence (level 6, between bitwise OR and AND), matching Python/C/Mathematica operator precedence. The `**` operator is always exponentiation regardless of context.
 
 ### Comparison Operators
 

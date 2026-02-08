@@ -123,14 +123,19 @@ GRAMMAR = r"""
     //   3.  not, !                     (logical NOT, unary prefix)
     //   4.  ==, !=, <, >, <=, >=      (comparison, chainable)
     //   5.  bor, |                     (bitwise OR, left-assoc)
-    //   6.  xor                        (bitwise XOR, left-assoc)
+    //   6.  xor, ^ (in bit context)   (bitwise XOR, left-assoc)
     //   7.  band, &                    (bitwise AND, left-assoc)
     //   8.  shl/<<, shr/>>            (bit shifts, left-assoc)
     //   9.  +, -                       (addition, left-assoc)
     //  10.  *, /, //, %               (multiplication, left-assoc)
     //  11.  -x, +x, ~, bnot          (unary prefix)
-    //  12.  **, ^                      (exponentiation, right-assoc)
+    //  12.  **, ^ (in num context)    (exponentiation, right-assoc)
     //  13.  atoms, context blocks     (terminals)
+
+    // Virtual tokens: CARET is matched by lexer, then transformed
+    // via lexer_callbacks into CARET_AS_POWER or CARET_AS_XOR
+    // based on context stack (num vs bit).
+    %declare CARET_AS_POWER CARET_AS_XOR
 
     ?body: or_expr
 
@@ -158,6 +163,7 @@ GRAMMAR = r"""
 
     ?bitxor_expr: bitand_expr
                 | bitxor_expr "xor" bitand_expr -> bitxor
+                | bitxor_expr CARET_AS_XOR bitand_expr -> bitxor
 
     ?bitand_expr: shift_expr
                 | bitand_expr "band" shift_expr -> bitand
@@ -186,8 +192,8 @@ GRAMMAR = r"""
                | "bnot" unary_expr -> bitnot
 
     ?power_expr: atom
-               | atom "**" unary_expr  -> power
-               | atom "^" unary_expr   -> power
+               | atom "**" unary_expr          -> power
+               | atom CARET_AS_POWER unary_expr -> power
 
     ?atom: function_call
          | context_block
@@ -198,12 +204,19 @@ GRAMMAR = r"""
     function_call: NAME "(" [args] ")"
     args: body ("," body)*
 
-    context_block: "num" "[" body "]"   -> ctx_num
-                 | "bit" "[" body "]"   -> ctx_bit
-                 | "bool" "[" body "]"  -> ctx_bool
+    context_block: CTX_NUM_OPEN body RBRACK   -> ctx_num
+                 | CTX_BIT_OPEN body RBRACK   -> ctx_bit
+                 | CTX_BOOL_OPEN body RBRACK  -> ctx_bool
 
     literal: NUMBER
     variable: NAME
+
+    // Context-tracking terminals (matched before NAME due to higher priority)
+    CTX_NUM_OPEN.3: /num\[/
+    CTX_BIT_OPEN.3: /bit\[/
+    CTX_BOOL_OPEN.3: /bool\[/
+    RBRACK: "]"
+    CARET: "^"
 
     NAME: /[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*/
     NUMBER: /[0-9]+(\.[0-9]+)?/
@@ -252,7 +265,9 @@ class ASTTransformer(Transformer):
 
     # Bitwise operators -> BinaryOp / UnaryOp
     def bitor(self, left, right):    return BinaryOp(left, 'bor', right)
-    def bitxor(self, left, right):   return BinaryOp(left, 'xor', right)
+    def bitxor(self, *args):
+        nodes = [a for a in args if not isinstance(a, Token)]
+        return BinaryOp(nodes[0], 'xor', nodes[1])
     def bitand(self, left, right):   return BinaryOp(left, 'band', right)
     def shl(self, *args):
         nodes = [a for a in args if not isinstance(a, Token)]
@@ -263,9 +278,16 @@ class ASTTransformer(Transformer):
     def bitnot(self, operand):       return UnaryOp('~', operand)
 
     # Context blocks -> ContextBlock
-    def ctx_num(self, body):         return ContextBlock('num', body)
-    def ctx_bit(self, body):         return ContextBlock('bit', body)
-    def ctx_bool(self, body):        return ContextBlock('bool', body)
+    # CTX_*_OPEN and RBRACK are named terminals, producing Token objects
+    def ctx_num(self, *args):
+        body = [a for a in args if not isinstance(a, Token)]
+        return ContextBlock('num', body[0])
+    def ctx_bit(self, *args):
+        body = [a for a in args if not isinstance(a, Token)]
+        return ContextBlock('bit', body[0])
+    def ctx_bool(self, *args):
+        body = [a for a in args if not isinstance(a, Token)]
+        return ContextBlock('bool', body[0])
 
     # Arithmetic operators -> BinaryOp
     def add(self, left, right):      return BinaryOp(left, '+', right)
@@ -274,7 +296,9 @@ class ASTTransformer(Transformer):
     def div(self, left, right):      return BinaryOp(left, '/', right)
     def floordiv(self, left, right): return BinaryOp(left, '//', right)
     def mod_op(self, left, right):   return BinaryOp(left, '%', right)
-    def power(self, left, right):    return BinaryOp(left, '**', right)
+    def power(self, *args):
+        nodes = [a for a in args if not isinstance(a, Token)]
+        return BinaryOp(nodes[0], '**', nodes[1])
 
     # Unary operators -> UnaryOp
     def neg(self, operand):          return UnaryOp('-', operand)
@@ -331,6 +355,53 @@ def _format_parse_error(e: Exception, text: str) -> str:
 
 
 # =============================================================================
+# Contextual Lexer (Issue #52: ^ precedence in bit[] context)
+# =============================================================================
+
+class CaretPostLex:
+    """Post-lexer that transforms ^ tokens based on context block nesting.
+
+    The contextual lexer won't try to match CARET unless it's expected by the
+    parser. Since grammar rules reference only CARET_AS_POWER and CARET_AS_XOR
+    (declared virtual tokens), CARET is never expected. The always_accept set
+    forces the contextual lexer to always match CARET, and this post-lexer
+    transforms it into the correct virtual token based on context.
+
+    Context stack tracks bit[...]/num[...]/bool[...] nesting:
+    - Default context is 'num' (^ = power at level 12)
+    - Inside bit[...], ^ becomes XOR at level 6
+    """
+    # Tell the contextual lexer to always try matching CARET
+    always_accept = frozenset({'CARET'})
+
+    def __init__(self):
+        self._stack: List[str] = ['num']
+
+    def reset(self):
+        """Reset context stack for a new parse run."""
+        self._stack = ['num']
+
+    def process(self, stream):
+        """Transform CARET tokens based on context block nesting."""
+        for token in stream:
+            if token.type == 'CTX_BIT_OPEN':
+                self._stack.append('bit')
+            elif token.type == 'CTX_NUM_OPEN':
+                self._stack.append('num')
+            elif token.type == 'CTX_BOOL_OPEN':
+                self._stack.append('bool')
+            elif token.type == 'RBRACK':
+                if len(self._stack) > 1:
+                    self._stack.pop()
+            elif token.type == 'CARET':
+                if self._stack[-1] == 'bit':
+                    token.type = 'CARET_AS_XOR'
+                else:
+                    token.type = 'CARET_AS_POWER'
+            yield token
+
+
+# =============================================================================
 # Expression Parser
 # =============================================================================
 
@@ -339,7 +410,9 @@ class ExpressionParser:
     Parser for mathematical query expressions.
 
     Uses Lark to parse expressions into an AST of dataclasses.
-    Parse once, evaluate many times.
+    Parse once, evaluate many times. Uses contextual lexing so that
+    ^ is parsed at the correct precedence level based on context
+    (power in num/default, XOR in bit[...]).
 
     Example:
         parser = ExpressionParser()
@@ -347,10 +420,12 @@ class ExpressionParser:
     """
 
     def __init__(self):
+        self._postlex = CaretPostLex()
         self._parser = Lark(
             GRAMMAR,
             parser='lalr',
-            transformer=ASTTransformer()
+            transformer=ASTTransformer(),
+            postlex=self._postlex,
         )
 
     def parse(self, text: str) -> Expression:
@@ -370,6 +445,7 @@ class ExpressionParser:
         if not text:
             raise ParseError("Empty expression")
 
+        self._postlex.reset()
         try:
             return self._parser.parse(text)
         except (UnexpectedInput, UnexpectedCharacters, UnexpectedToken) as e:
@@ -605,20 +681,13 @@ class ExpressionEvaluator:
     }
 
     def _binary_op(self, left: Any, op: str, right: Any) -> Any:
-        """Perform a binary operation (arithmetic or bitwise)."""
-        # Context-dependent: ^ means power in num/default, XOR in bit
-        if op == '**':
-            ctx = getattr(self, '_eval_context', 'num')
-            if ctx == 'bit':
-                return op_module.xor(int(left), int(right))
-            else:
-                if op in ('/', '//', '%') and right == 0:
-                    raise EvaluationError(f"Division by zero: {left} {op} {right}")
-                try:
-                    return op_module.pow(left, right)
-                except (OverflowError, ValueError) as e:
-                    raise EvaluationError(f"Arithmetic error: {left} {op} {right} -- {e}")
+        """Perform a binary operation (arithmetic or bitwise).
 
+        Note: ^ disambiguation is handled at parse time via contextual lexing
+        (Issue #52). In bit[] context, ^ parses as XOR at level 6 producing
+        BinaryOp('xor'). In num/default context, ^ parses as power at level 12
+        producing BinaryOp('**'). ** is always power regardless of context.
+        """
         if op in ('/', '//', '%') and right == 0:
             raise EvaluationError(f"Division by zero: {left} {op} {right}")
         try:

@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.17] - 2026-02-07
+
+### Fixed
+- **`^` precedence in `bit[...]` context** (Issue #52)
+  - `^` now parses at XOR precedence (level 6) inside `bit[...]`, matching Python/C/Mathematica
+  - Previously `bit[2 band 3 ^ 4]` gave `2` (wrong), now gives `6` (correct)
+  - `**` remains exponentiation in all contexts
+  - Implemented via Lark `postlex` contextual lexing with `%declare` virtual tokens
+
+### Added
+- `CaretPostLex` class: context-aware post-lexer that transforms `^` tokens based on `bit[]/num[]/bool[]` nesting
+- `CARET_AS_POWER` / `CARET_AS_XOR` virtual tokens with `%declare` for correct LALR precedence
+- `CTX_BIT_OPEN`, `CTX_NUM_OPEN`, `CTX_BOOL_OPEN`, `RBRACK`, `CARET` named terminals for context tracking
+- 10 new tests for #52 edge cases (727 total) — zero regressions
+
+### Changed
+- `ExpressionParser` uses `postlex=CaretPostLex()` instead of inline transformer for context blocks
+- Evaluator `_binary_op` simplified: removed context-dependent `**` dispatch (parser handles it)
+- Context block transformer methods (`ctx_num`, `ctx_bit`, `ctx_bool`) updated to filter Token objects from named terminals
+
+### Technical Notes
+- Lark's contextual lexer (triggered by `%declare`) only matches terminals expected by the parser state
+- `always_accept = frozenset({'CARET'})` forces the contextual lexer to always match `^`
+- Post-lexer transforms `CARET` → `CARET_AS_POWER` (level 12) or `CARET_AS_XOR` (level 6) based on context stack
+- `bitxor` and `power` transformer methods filter Token objects (same pattern as `shl`/`shr`)
+
 ## [0.7.14] - 2026-02-07
 
 ### Added

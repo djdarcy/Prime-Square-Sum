@@ -2027,6 +2027,70 @@ class TestContextBlocks:
         matches = list(find_matches(expr, evaluator, {}))
         assert matches[0]["__verify_result__"] is True
 
+    # Issue #52: ^ precedence in bit[] context — fixed via contextual lexing
+    # These tests verify that ^ parses at XOR precedence (level 6) inside
+    # bit[...] rather than power precedence (level 12).
+
+    def test_issue52_caret_xor_precedence_band_then_caret(self, parser, evaluator):
+        """bit[2 band 3 ^ 4] → (2 & 3) ^ 4 = 2 ^ 4 = 6  (was: 2)"""
+        expr = parser.parse("verify bit[2 band 3 ^ 4] == 6")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_caret_xor_precedence_caret_then_band(self, parser, evaluator):
+        """bit[7 ^ 3 band 5] → 7 ^ (3 & 5) = 7 ^ 1 = 6  (was: 4)"""
+        expr = parser.parse("verify bit[7 ^ 3 band 5] == 6")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_caret_xor_precedence_mixed_band_caret(self, parser, evaluator):
+        """bit[7 band 5 ^ 6 band 3] → (7&5) ^ (6&3) = 5^2 = 7  (was: 3)"""
+        expr = parser.parse("verify bit[7 band 5 ^ 6 band 3] == 7")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_doublestar_always_power_in_bit(self, parser, evaluator):
+        """** is always power, even inside bit[...]: bit[2**3] == 8"""
+        expr = parser.parse("verify bit[2**3] == 8")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_mixed_context_same_expression(self, parser, evaluator):
+        """bit[2^3] + 2^3 → 1 + 8 = 9  (first ^ is XOR, second ^ is power)"""
+        expr = parser.parse("verify bit[2^3] + 2^3 == 9")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_nested_context_inner_num(self, parser, evaluator):
+        """bit[2 ^ num[2^3]] → 2 XOR 8 = 10  (inner ^ is power)"""
+        expr = parser.parse("verify bit[2 ^ num[2^3]] == 10")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_caret_with_parens_in_bit(self, parser, evaluator):
+        """Parens don't change context: bit[(2^3)] → XOR → 1"""
+        expr = parser.parse("verify bit[(2^3)] == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_simple_caret_xor(self, parser, evaluator):
+        """Simple case: bit[2^3] still works correctly as XOR."""
+        expr = parser.parse("verify bit[2^3] == 1")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_caret_power_default(self, parser, evaluator):
+        """Default (num) context: 2^3 == 8 still works."""
+        expr = parser.parse("verify 2^3 == 8")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_issue52_xor_keyword_still_works(self, parser, evaluator):
+        """xor keyword is unaffected by the change."""
+        expr = parser.parse("verify bit[5 xor 3] == 6")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
 
 # =============================================================================
 # Phase 3: Free Variable Tests for New Operators
