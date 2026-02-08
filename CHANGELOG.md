@@ -28,6 +28,75 @@ All notable changes to this project will be documented in this file.
 - `2026-02-08__10-00-17__dev-workflow_phase3d-closed-form-stf-pathway.md` — Phase 3D pathway analysis
 - `2026-02-08__12-13-07__full-postmortem_phase3d-telescoping-stf-and-remaining-roadmap.md` — Phase 3D postmortem and remaining roadmap
 
+## [0.7.19] - 2026-02-08
+
+### Added
+- **Imaginary literal syntax** for complex numbers (Issue #54, Phase 2)
+  - Opt-in via `config.json`: `"imaginary_unit": "ii"` enables `3 + 4ii` = `complex(3, 4)`
+  - Disabled by default — `complex()` function is the canonical approach
+  - Supports `ii`, `i`, `j`, `both`, or `none` suffix configurations
+  - Float support: `3.5ii` = `complex(0, 3.5)`
+  - Variables `i`, `j`, `k` remain unreserved when disabled or using `ii` suffix
+- Configurable `imaginary_unit` in `config.json`: `"none"` (default), `"ii"`, `"i"`, `"j"`, `"both"`
+- Dynamic grammar construction via `ExpressionParser(imaginary_suffix_pattern=...)`
+- 21 new tests (4 parsing + 9 evaluation + 2 variable preservation + 6 config variants) — 780 total, zero regressions
+
+### Changed
+- `ExpressionParser.__init__()` accepts `imaginary_suffix_pattern` parameter for configurable imaginary literals
+- `ExpressionParser._build_grammar()` conditionally inserts `IMAGINARY` terminal before `NUMBER`
+- `ASTTransformer.literal()` uses `rstrip()` for multi-character suffix handling (e.g., `ii`)
+- `Literal.value` type hint expanded to `Union[int, float, complex]`
+- `handle_expression()` accepts `config` parameter, maps `imaginary_unit` to regex pattern
+- `Config` class gains `imaginary_unit` field (default `'ii'`)
+- Updated `docs/expressions.md`: imaginary literal section with config table, removed complex literal from limitations
+
+## [0.7.18] - 2026-02-08
+
+### Added
+- **Complex number support** via function-first approach (Issue #54, Phase 1)
+  - `complex(real, imag)` — create complex numbers (`complex(3, 4)` = 3+4j)
+  - `real(z)` — extract real part (`real(complex(3, 4))` = 3)
+  - `imag(z)` — extract imaginary part (`imag(complex(3, 4))` = 4)
+  - `conj(z)` — complex conjugate (`conj(complex(3, 4))` = 3-4j)
+  - All registered in `pss` namespace, accessible qualified (`pss.complex`) or unqualified
+- `sqrt()` now handles complex inputs via `cmath.sqrt()`
+- `abs()` works with complex numbers (returns magnitude: `abs(complex(3, 4))` = 5)
+- Arithmetic operators (`+`, `-`, `*`, `/`, `**`) work with complex values
+- `TypeError` handling in evaluator for unsupported operations (e.g., `//` on complex, ordering comparisons)
+- 32 new tests (14 function registry + 18 grammar integration) — 759 total, zero regressions
+
+### Changed
+- `_builtin_sqrt` checks for complex input before negative check, delegates to `cmath.sqrt()`
+- `_binary_op` catches `TypeError` with clear error message for unsupported type combinations
+- `_compare` catches `TypeError` for ordering operators (`<`, `>`, `<=`, `>=`) on complex numbers
+- Updated `docs/expressions.md`: complex functions in PSS table, literal syntax noted as future work
+
+## [0.7.17] - 2026-02-07
+
+### Fixed
+- **`^` precedence in `bit[...]` context** (Issue #52)
+  - `^` now parses at XOR precedence (level 6) inside `bit[...]`, matching Python/C/Mathematica
+  - Previously `bit[2 band 3 ^ 4]` gave `2` (wrong), now gives `6` (correct)
+  - `**` remains exponentiation in all contexts
+  - Implemented via Lark `postlex` contextual lexing with `%declare` virtual tokens
+
+### Added
+- `CaretPostLex` class: context-aware post-lexer that transforms `^` tokens based on `bit[]/num[]/bool[]` nesting
+- `CARET_AS_POWER` / `CARET_AS_XOR` virtual tokens with `%declare` for correct LALR precedence
+- `CTX_BIT_OPEN`, `CTX_NUM_OPEN`, `CTX_BOOL_OPEN`, `RBRACK`, `CARET` named terminals for context tracking
+- 10 new tests for #52 edge cases (727 total) — zero regressions
+
+### Changed
+- `ExpressionParser` uses `postlex=CaretPostLex()` instead of inline transformer for context blocks
+- Evaluator `_binary_op` simplified: removed context-dependent `**` dispatch (parser handles it)
+- Context block transformer methods (`ctx_num`, `ctx_bit`, `ctx_bool`) updated to filter Token objects from named terminals
+
+### Technical Notes
+- Lark's contextual lexer (triggered by `%declare`) only matches terminals expected by the parser state
+- `always_accept = frozenset({'CARET'})` forces the contextual lexer to always match `^`
+- Post-lexer transforms `CARET` → `CARET_AS_POWER` (level 12) or `CARET_AS_XOR` (level 6) based on context stack
+- `bitxor` and `power` transformer methods filter Token objects (same pattern as `shl`/`shr`)
+
 ## [0.7.16] - 2026-02-07
 
 ### Added
@@ -83,6 +152,50 @@ All notable changes to this project will be documented in this file.
 - `2026-02-07__13-23-27__DISCUSS_Rnd{1-4}_*_phase3-lean-tf-recast-strategy.md` — 3-round Gem discuss + independent assessment
 - `2026-02-07__15-27-09__dev-workflow_lean-digit-meta-formalizations.md` — analysis for digit meta additions
 
+## [0.7.14] - 2026-02-07
+
+### Added
+- **Boolean operators in expressions** (Issue #44 Phase 3a)
+  - `and` / `&&` — logical AND with short-circuit evaluation
+  - `or` / `||` — logical OR with short-circuit evaluation
+  - `not` / `!` — logical NOT (unary prefix)
+  - Short-circuit: `0 and 1/0` does not raise, `1 or 1/0` does not raise
+- **Bitwise operators in expressions**
+  - Keyword operators: `xor`, `band`, `bor`, `bnot`, `shl`, `shr`
+  - Symbolic operators: `&`, `|`, `~`, `<<`, `>>`
+  - Compound functions: `nand(a,b)`, `nor(a,b)`, `xnor(a,b)` registered in `pss` namespace
+- **`^` as power alias** — `2^3 == 8` (math convention, same as `**`)
+- **Chained comparisons** — `1 < x < 10` evaluates as `(1 < x) and (x < 10)` with middle operand evaluated once
+- **Context blocks** for operator disambiguation (Phase 3a infrastructure)
+  - `num[expr]` — numeric context (default, no-op)
+  - `bit[expr]` — bitwise context: `^` becomes XOR, `and`/`or`/`not` become bitwise
+  - `bool[expr]` — explicit boolean context
+  - `ContextBlock` AST node with context-aware evaluation
+- 67 new tests (717 total, 243 grammar tests) — zero regressions
+
+### Changed
+- `Comparison` dataclass: `(left, operator, right)` → `(operands: List, operators: List)` for chained comparisons
+- `Expression.comparison` field renamed to `Expression.body` (body can be any AST node, not just Comparison)
+- Grammar expanded from 5 to 13 precedence levels matching Python's operator hierarchy
+- `ExpressionEvaluator` handles short-circuit logic for `and`/`or` before dispatch
+
+### Technical Notes
+- 13-level precedence (lowest → highest): `or/||` → `and/&&` → `not/!` → comparison → `bor/|` → `xor` → `band/&` → `shl/shr` → `+/-` → `*/÷` → unary → `**/^` → atoms
+- `SHL_OP`/`SHR_OP` terminals use Lark priority `.2` to prevent `<<`/`>>` tokenization conflict with `<`/`>` comparison operators
+- `and`/`or` inside `bit[...]` context become bitwise AND/OR (eager, not short-circuit)
+- `not` inside `bit[...]` context becomes bitwise NOT (`~`)
+- `^` inside `bit[...]` context becomes XOR instead of power
+- Reserved words added: `and`, `or`, `not`, `xor`, `band`, `bor`, `bnot`, `shl`, `shr`, `num`, `bit`, `bool`
+- Longer variable names containing keywords still work: `android`, `notable`, `boolean` (longest match wins)
+- num→bool conversion uses strict positive: `>0 = true, <=0 = false`
+
+### Related Issues
+- Issue #44: Extend expression grammar (Phase 3a complete)
+- Issue #13: Generalized Expression Grammar (epic)
+
+### Design Documents
+- `2026-02-07__04-32-12__full-postmortem_phase2-complete-and-phase3-design.md`
+
 ## [0.7.13] - 2026-02-07
 
 ### Added
@@ -135,6 +248,87 @@ All notable changes to this project will be documented in this file.
 - Structural proofs for 55 and 666 avoid `native_decide` by composing general theorems
 - PrimesumMod6 proof chain: sq_6k_plus_{1,5}_mod6 → prime_sq_mod_six → primesumN_mod6
 - Gem consulted for proof strategy and project organization; API names verified against Mathlib source
+
+### Design Documents
+- `2026-02-06__16-16-09__full-postmortem_tri-is-triangular-proof-and-synthesis.md`
+- `2026-02-06__15-27-22__full-postmortem_pascal-exploration-lean-mathlib-setup.md`
+
+## [0.7.12] - 2026-02-07
+
+### Added
+- **Arithmetic operators in expressions** (Issue #44 Phase 2)
+  - Binary operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`
+  - Unary operators: `-x`, `+x`
+  - Python-compatible operator precedence and associativity
+  - Right-associative exponentiation: `2**3**2 == 512`
+  - Unary minus follows Python convention: `-3**2 == -9`
+  - Parenthesized sub-expressions: `(2 + 3) * 4 == 20`
+  - Arithmetic inside function arguments: `pow(2 + 1, 2) == 9`
+- **Expression validation ("compile" phase)**
+  - `validate_expression()` checks function existence and arity before evaluation
+  - Catches unknown functions and argument count mismatches before iteration
+  - Integrated into CLI between parse and evaluation steps
+- **`BinaryOp` and `UnaryOp` AST classes** for arithmetic expression representation
+- **Documentation**: Arithmetic operators section, precedence table, behavioral notes, limitations table
+- 77 new tests (170 grammar tests total, 644 total) — zero regressions
+
+### Changed
+- Grammar replaced flat `term` rule with layered precedence hierarchy using Lark `?` prefix
+- `find_free_variables()` handles BinaryOp and UnaryOp nodes
+- `ExpressionEvaluator` uses `operator` module dispatch tables for arithmetic
+
+### Technical Notes
+- Grammar uses `?`-prefixed rules for transparent single-child passthrough (idiomatic Lark)
+- Precedence order (lowest to highest): `+/-` → `*////%` → unary `-/+` → `**` → atoms
+- Division by zero raises `EvaluationError` with clear message
+- `mod_op` rule name avoids conflict with existing `mod()` function
+
+### Documented Limitations
+- Implicit multiplication (`2x`) — use `2 * x`
+- Scientific notation (`1.5e10`) — use `1.5 * pow(10, 10)`
+- Leading-dot decimals (`.5`) — use `0.5`
+- Chained comparisons (`1 < x < 10`) — use separate expressions
+- Boolean operators (`and`, `or`, `not`) — future work
+- Bitwise operators (`&`, `|`, `^`, `~`) — future work
+- Complex numbers (`3+2j`) — future work, use function wrappers
+
+### Related Issues
+- Issue #44: Extend expression grammar with arithmetic operators (Phase 2 complete)
+- Issue #13: Generalized Expression Grammar (epic)
+
+### Design Documents
+- `2026-02-06__18-04-25__phase2-arithmetic-operators-grammar-extension.md`
+- `2026-02-07__01-03-00__full-postmortem_phase2-arithmetic-operators.md`
+
+## [0.7.11] - 2026-02-06
+
+### Added
+- **Lean 4 + Mathlib v4.27.0 infrastructure**
+  - `lakefile.toml`, `lean-toolchain`, `lake-manifest.json` at repo root
+  - Proof files in `proofs/` — each as its own Lean library (`TriSum`, `PrimesumMod6`)
+  - `.gitignore` updated for `.lake/` build artifacts
+- **`tri_is_triangular` proved** — last `sorry` eliminated, all proofs fully machine-verified
+  - Uses `Nat.sqrt`, `Nat.even_mul_succ_self`, `ring` to show `isTriangular(tri(n)) = true` for all n
+  - Proves the discriminant `1 + 8·tri(n) = (2n+1)²` is always a perfect square
+- **New theorems in TriSum.lean** (Part 8 synthesis section)
+  - `tri_zero` — base case: tri(0) = 0
+  - `two_mul_tri` — division-free formula: 2·tri(n) = n·(n+1), proved by induction
+  - `tri_tri_is_triangular` — composition: tri(tri(n)) is always triangular
+  - `tri_plus_succ_is_triangular` — chaining: tri(n)+(n+1) is triangular
+  - `deep_tri_n3_triangular` — 55 is triangular via tri(tri(4)), not computation
+  - `deep_tri_n4_triangular` — 666 is triangular via tri(tri(8)), not computation
+- **New proof file: `PrimesumMod6.lean`**
+  - primesum(n,2) ≡ (n+5) mod 6 for all n ≥ 3
+  - Algebraic core: (6k+1)² % 6 = 1 and (6k+5)² % 6 = 1 (ring + omega)
+  - Bounded verification for n = 3..7
+- **Conjecture 5** (stf-k² pattern) added to `paper and notes/conjectures.md`
+- **`utils/pascal_systems.py`** — Pascal-weighted number system analytical tools
+- 8 verification/thinking scripts in `tests/one-offs/thinking/`
+
+### Technical Notes
+- Proof dependency chain: tri_zero → tri_succ → two_mul_tri → tri_is_triangular → tri_tri_is_triangular
+- Structural proofs for 55 and 666 avoid `native_decide` by composing general theorems
+- Gem consulted for proof strategy; API names verified against Mathlib source
 
 ### Design Documents
 - `2026-02-06__16-16-09__full-postmortem_tri-is-triangular-proof-and-synthesis.md`

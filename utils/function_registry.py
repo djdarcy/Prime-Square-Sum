@@ -37,6 +37,7 @@ from typing import Callable, Dict, Optional, Any, List, Union
 import inspect
 import importlib.util
 import math as _math
+import cmath as _cmath
 import warnings
 import sys
 from pathlib import Path
@@ -65,8 +66,10 @@ def _builtin_mod(a: Union[int, float], b: Union[int, float]) -> Union[int, float
     return a % b
 
 
-def _builtin_sqrt(x: Union[int, float]) -> Union[int, float]:
+def _builtin_sqrt(x: Union[int, float, complex]) -> Union[int, float, complex]:
     """Return the square root of x. Returns int if result is integral."""
+    if isinstance(x, complex):
+        return _cmath.sqrt(x)
     if x < 0:
         raise ValueError(f"sqrt() requires non-negative input, got {x}")
     result = _math.isqrt(x) if isinstance(x, int) else _math.sqrt(x)
@@ -87,6 +90,31 @@ def _builtin_floor(x: Union[int, float]) -> int:
 def _builtin_ceil(x: Union[int, float]) -> int:
     """Round x up to the nearest integer."""
     return _math.ceil(x)
+
+
+# ---------------------------------------------------------------------------
+# Complex number wrappers
+# ---------------------------------------------------------------------------
+
+def _builtin_complex(real: Union[int, float] = 0,
+                     imag: Union[int, float] = 0) -> complex:
+    """Create a complex number from real and imaginary parts."""
+    return complex(real, imag)
+
+
+def _builtin_real(z: Union[int, float, complex]) -> Union[int, float]:
+    """Return the real part of a number."""
+    return z.real if isinstance(z, complex) else z
+
+
+def _builtin_imag(z: Union[int, float, complex]) -> Union[int, float]:
+    """Return the imaginary part of a number (0 for reals)."""
+    return z.imag if isinstance(z, complex) else 0
+
+
+def _builtin_conj(z: Union[int, float, complex]) -> Union[int, float, complex]:
+    """Return the complex conjugate."""
+    return z.conjugate() if isinstance(z, complex) else z
 
 
 @dataclass
@@ -239,9 +267,27 @@ class FunctionRegistry:
             self._unqualified_owners[name] = [namespace]
 
     def _register_builtins(self) -> None:
-        """Register built-in functions under math.* and pss.* namespaces."""
+        """Register built-in functions under math.*, pss.*, and bitwise namespaces."""
         self._register_pss_builtins()
         self._register_math_builtins()
+        self._register_bitwise_builtins()
+
+    def _register_bitwise_builtins(self) -> None:
+        """Register bitwise compound functions (nand, nor, xnor)."""
+        def nand(a: int, b: int) -> int:
+            """Bitwise NAND: ~(a & b)"""
+            return ~(int(a) & int(b))
+
+        def nor(a: int, b: int) -> int:
+            """Bitwise NOR: ~(a | b)"""
+            return ~(int(a) | int(b))
+
+        def xnor(a: int, b: int) -> int:
+            """Bitwise XNOR: ~(a ^ b)"""
+            return ~(int(a) ^ int(b))
+
+        for name, func in [("nand", nand), ("nor", nor), ("xnor", xnor)]:
+            self._register_namespaced(name, func, namespace="pss", source="builtin")
 
     def _register_pss_builtins(self) -> None:
         """Register Prime-Square-Sum specific functions under pss.* namespace."""
@@ -265,6 +311,16 @@ class FunctionRegistry:
         ]
 
         for name, func in pss_builtins:
+            self._register_namespaced(name, func, namespace="pss", source="builtin")
+
+        # Complex number functions
+        complex_builtins = [
+            ("complex", _builtin_complex),
+            ("real", _builtin_real),
+            ("imag", _builtin_imag),
+            ("conj", _builtin_conj),
+        ]
+        for name, func in complex_builtins:
             self._register_namespaced(name, func, namespace="pss", source="builtin")
 
     def _register_math_builtins(self) -> None:

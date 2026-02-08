@@ -62,7 +62,157 @@ Error: Expression has free variables (n) but no quantifier.
 Use 'does_exist' or 'for_any' prefix, e.g.: does_exist primesum(n,2) == 666
 ```
 
-### Operators
+### Operator Precedence (v0.7.14+)
+
+Full operator precedence from lowest to highest binding power:
+
+| Level | Operators | Associativity | Type | Example |
+|-------|-----------|---------------|------|---------|
+| 1 (lowest) | `or`, `\|\|` | Left | Logical OR | `a or b` |
+| 2 | `and`, `&&` | Left | Logical AND | `a and b` |
+| 3 | `not`, `!` | Right (prefix) | Logical NOT | `not x` |
+| 4 | `==`, `!=`, `<`, `>`, `<=`, `>=` | Chainable | Comparison | `1 < x < 10` |
+| 5 | `bor`, `\|` | Left | Bitwise OR | `5 bor 3` |
+| 6 | `xor` | Left | Bitwise XOR | `5 xor 3` |
+| 7 | `band`, `&` | Left | Bitwise AND | `5 band 3` |
+| 8 | `shl`/`<<`, `shr`/`>>` | Left | Bit shifts | `1 << 3` |
+| 9 | `+`, `-` | Left | Addition | `2 + 3` |
+| 10 | `*`, `/`, `//`, `%` | Left | Multiplication | `6 * 7` |
+| 11 | `-x`, `+x`, `~`, `bnot` | Right (prefix) | Unary | `~0`, `-x` |
+| 12 | `**`, `^` | Right | Exponentiation | `2^3` = 8 |
+| 13 (highest) | Atoms, context blocks | N/A | Terminals | `tri(n)`, `bit[expr]` |
+
+### Arithmetic Operators (v0.7.12+)
+
+```bash
+# Arithmetic in expressions
+--expr "does_exist n**2 == 25"                          # n=5
+--expr "verify 2 + 3 * 4 == 14"                         # true (precedence)
+--expr "verify (2 + 3) * 4 == 20"                       # true (parens)
+--expr "does_exist tri(n) + 1 == 11" --max-n 10         # n=4
+--expr "does_exist primesum(n,2) - 1 == 665" --max-n 10 # n=7
+```
+
+| Operator | Operation | Example | Result |
+|----------|-----------|---------|--------|
+| `+` | Addition | `2 + 3` | `5` |
+| `-` | Subtraction | `10 - 4` | `6` |
+| `*` | Multiplication | `3 * 7` | `21` |
+| `/` | True division | `7 / 2` | `3.5` |
+| `//` | Floor division | `7 // 2` | `3` |
+| `%` | Modulo | `7 % 3` | `1` |
+| `**` | Exponentiation | `2 ** 10` | `1024` |
+| `^` | Power alias | `2^3` | `8` |
+| `-x` | Unary negation | `-5` | `-5` |
+| `+x` | Unary positive | `+5` | `5` |
+
+#### Behavioral Notes
+
+- **`-3**2` equals `-9`**: Exponentiation binds tighter than unary minus (Python convention). Use `(-3)**2` for 9.
+- **`2**3**2` equals `512`**: Right-associative — evaluated as `2**(3**2)` = `2**9`.
+- **`2^3` equals `8`**: `^` is a power alias (math convention), same as `**`.
+- **`7 / 2` equals `3.5`**: True division always returns float.
+- **`7 // 2` equals `3`**: Floor division rounds toward negative infinity.
+- **`0**0` equals `1`**: Python convention.
+- **Division by zero**: Raises an error with a clear message.
+
+#### Arithmetic in Function Arguments
+
+Arithmetic expressions can be used inside function arguments:
+
+```bash
+--expr "verify pow(2 + 1, 2) == 9"       # pow(3, 2) = 9
+--expr "does_exist primesum(n + 1, 2) == tri(m)"
+```
+
+### Boolean Operators (v0.7.14+)
+
+Logical operators with short-circuit evaluation:
+
+```bash
+--expr "does_exist n > 0 and n < 10 and tri(n) == 28" --max-n 20   # n=7
+--expr "verify 2 > 1 and 3 > 2"                                     # true
+--expr "verify not 1 > 2"                                            # true
+```
+
+| Operator | Alias | Operation | Short-circuit |
+|----------|-------|-----------|---------------|
+| `and` | `&&` | Logical AND | Stops on first falsy |
+| `or` | `\|\|` | Logical OR | Stops on first truthy |
+| `not` | `!` | Logical NOT | N/A (unary) |
+
+**Short-circuit behavior**: `0 and 1/0` does not raise an error (stops at `0`). `1 or 1/0` does not raise (stops at `1`).
+
+### Bitwise Operators (v0.7.14+)
+
+Integer bit manipulation operators, available as keywords or symbols:
+
+```bash
+--expr "verify 5 xor 3 == 6"       # 101 ^ 011 = 110
+--expr "verify 5 band 3 == 1"      # 101 & 011 = 001
+--expr "verify 5 bor 3 == 7"       # 101 | 011 = 111
+--expr "verify ~0 == -1"           # bitwise NOT
+--expr "verify 1 << 3 == 8"        # left shift
+--expr "verify 8 >> 3 == 1"        # right shift
+```
+
+| Keyword | Symbol | Operation | Example |
+|---------|--------|-----------|---------|
+| `bor` | `\|` | Bitwise OR | `5 bor 3` = 7 |
+| `xor` | — | Bitwise XOR | `5 xor 3` = 6 |
+| `band` | `&` | Bitwise AND | `5 band 3` = 1 |
+| `shl` | `<<` | Left shift | `1 shl 3` = 8 |
+| `shr` | `>>` | Right shift | `8 shr 3` = 1 |
+| `bnot` | `~` | Bitwise NOT (prefix) | `bnot 0` = -1 |
+
+**Compound operations** (registered as functions):
+
+| Function | Operation | Example |
+|----------|-----------|---------|
+| `nand(a, b)` | `~(a & b)` | `nand(5, 3)` = -2 |
+| `nor(a, b)` | `~(a \| b)` | `nor(5, 3)` = -8 |
+| `xnor(a, b)` | `~(a ^ b)` | `xnor(5, 3)` = -7 |
+
+### Chained Comparisons (v0.7.14+)
+
+Comparisons can be chained, Python-style:
+
+```bash
+--expr "verify 1 < 2 < 3"                                           # true
+--expr "does_exist 1 < n < 10 and tri(n) == 28" --max-n 20          # n=7
+--expr "verify 1 <= 2 < 3"                                          # true
+```
+
+`a < b < c` evaluates as `(a < b) and (b < c)` with `b` evaluated only once.
+
+### Context Blocks (v0.7.14+)
+
+Context blocks change how ambiguous operators are interpreted:
+
+```bash
+--expr "verify bit[2^3] == 1"          # ^ is XOR in bit context: 2 XOR 3 = 1
+--expr "verify 2^3 == 8"               # ^ is power in default context
+--expr "verify bit[5 or 3] == 7"       # or is bitwise OR in bit context
+--expr "verify bit[5 and 3] == 1"      # and is bitwise AND in bit context
+```
+
+| Block | Effect |
+|-------|--------|
+| `num[expr]` | Numeric context (default — no-op) |
+| `bit[expr]` | Bitwise context: `^`→XOR, `and`→bitwise AND, `or`→bitwise OR, `not`→bitwise NOT |
+| `bool[expr]` | Explicit boolean context (same as default for `and`/`or`/`not`) |
+
+**Mixed contexts**: Context blocks can appear anywhere in an expression:
+
+```bash
+--expr "verify bit[2^3] + 1 == 2"      # bit context for XOR, then addition in default context
+--expr "verify bit[2 band 3 ^ 4] == 6" # ^ is XOR at correct precedence (level 6)
+--expr "verify bit[2^3] + 2^3 == 9"    # first ^ is XOR (=1), second ^ is power (=8)
+```
+
+Inside `bit[...]`, `^` is parsed at XOR precedence (level 6, between bitwise OR and AND), matching Python/C/Mathematica operator precedence. The `**` operator is always exponentiation regardless of context.
+
+### Comparison Operators
 
 | Operator | Meaning |
 |----------|---------|
@@ -104,6 +254,10 @@ Available namespaces: `pss` (tool-specific), `math` (Python math module), `user`
 | `factorial(n)` | n! | `factorial(5) = 120` |
 | `catalan(n)` | nth Catalan number | `catalan(5) = 42` |
 | `digital_root(x)` | Digital root | `digital_root(666) = 9` |
+| `complex(real, imag)` | Create complex number | `complex(3, 4)` = 3+4j |
+| `real(z)` | Real part of complex | `real(complex(3, 4))` = 3 |
+| `imag(z)` | Imaginary part of complex | `imag(complex(3, 4))` = 4 |
+| `conj(z)` | Complex conjugate | `conj(complex(3, 4))` = 3-4j |
 
 **Math functions** (all Python `math` module functions available via `math.*`):
 
@@ -229,6 +383,66 @@ python prime-square-sum.py --target 666 --verbose
 # Found: n=7
 # Time: 0.023s
 ```
+
+## Expression Validation
+
+Expressions are validated before evaluation (v0.7.12+). The parser checks:
+
+1. **Syntax**: Malformed expressions produce parse errors with position indicators
+2. **Functions**: Unknown function names are caught before iteration begins
+3. **Arity**: Wrong number of arguments produces a clear error
+
+```bash
+# Unknown function caught at validation time
+python prime-square-sum.py --expr "does_exist bogus(n) == 5"
+# Error: Unknown function: 'bogus'
+
+# Arity mismatch caught at validation time
+python prime-square-sum.py --expr "verify tri(1, 2, 3) == 5"
+# Error: tri() requires 1 argument(s), got 3
+```
+
+## Current Limitations
+
+These features are not currently supported in the expression grammar. Most can be worked around using user-defined functions via `--functions` or saved equations in `equations.json`.
+
+| Feature | Workaround |
+|---------|-----------|
+| Implicit multiplication (`2x`) | Write `2 * x` |
+| Scientific notation (`1.5e10`) | Use `1.5 * pow(10, 10)` |
+| Leading-dot decimals (`.5`) | Write `0.5` |
+| Assignment (`x = 3 + 2`) | Use `--equation` with parameters |
+| `xor` as variable name | Reserved — use a different name |
+
+## Imaginary Literals (Opt-in)
+
+Complex numbers can optionally be written using imaginary literal notation (v0.7.19+). This feature is **disabled by default** — use `complex()` for complex number creation without configuration.
+
+To enable, set `imaginary_unit` in `config.json`:
+
+```json
+{ "imaginary_unit": "ii" }
+```
+
+Then use imaginary literals in expressions:
+
+```bash
+python prime-square-sum.py --expr "verify abs(3 + 4ii) == 5"        # magnitude
+python prime-square-sum.py --expr "verify 1ii ** 2 == -1"           # i^2 = -1
+python prime-square-sum.py --expr "verify real(3 + 4ii) == 3"
+```
+
+### Suffix options
+
+| Value | Suffix | Example | Notes |
+|-------|--------|---------|-------|
+| `"none"` (default) | *(disabled)* | Use `complex(3, 2)` | All letters available as variables |
+| `"ii"` | `ii` | `3 + 2ii` | Safe — `i`, `j` remain variables |
+| `"i"` | `i` | `3 + 2i` | Math convention — reserves `i` in `NUMBER+i` |
+| `"j"` | `j` | `3 + 2j` | Python/EE convention — reserves `j` in `NUMBER+j` |
+| `"both"` | `i` or `j` | `3 + 2i` or `3 + 2j` | Reserves both in `NUMBER+suffix` |
+
+Imaginary literals require a leading digit: `2ii` is imaginary, but standalone `ii` is always a variable. The `complex()` function works regardless of this setting.
 
 ## See Also
 

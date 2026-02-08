@@ -759,3 +759,92 @@ class TestNamespaces:
         error_msg = str(exc_info.value)
         assert "tri" in error_msg
         assert "pss.tri" not in error_msg
+
+
+class TestComplexFunctions:
+    """Tests for complex number function registration (Issue #54)."""
+
+    def test_complex_function_registered(self):
+        """complex() is registered under pss namespace."""
+        registry = FunctionRegistry()
+        assert "pss.complex" in registry
+        assert "complex" in registry
+
+    def test_real_function_registered(self):
+        """real() is registered under pss namespace."""
+        registry = FunctionRegistry()
+        assert "pss.real" in registry
+        assert "real" in registry
+
+    def test_imag_function_registered(self):
+        """imag() is registered under pss namespace."""
+        registry = FunctionRegistry()
+        assert "pss.imag" in registry
+        assert "imag" in registry
+
+    def test_conj_function_registered(self):
+        """conj() is registered under pss namespace."""
+        registry = FunctionRegistry()
+        assert "pss.conj" in registry
+        assert "conj" in registry
+
+    def test_complex_creates_complex(self):
+        """complex(3, 4) returns 3+4j."""
+        registry = FunctionRegistry()
+        fn = registry.get("complex")
+        assert fn(3, 4) == 3 + 4j
+
+    def test_complex_default_imag(self):
+        """complex(5) defaults imaginary to 0."""
+        registry = FunctionRegistry()
+        fn = registry.get("complex")
+        assert fn(5) == 5 + 0j
+
+    def test_real_extracts_real(self):
+        """real(3+4j) returns 3.0."""
+        registry = FunctionRegistry()
+        fn = registry.get("real")
+        assert fn(3 + 4j) == 3.0
+
+    def test_real_of_real(self):
+        """real(5) returns 5 (passthrough for non-complex)."""
+        registry = FunctionRegistry()
+        fn = registry.get("real")
+        assert fn(5) == 5
+
+    def test_imag_extracts_imag(self):
+        """imag(3+4j) returns 4.0."""
+        registry = FunctionRegistry()
+        fn = registry.get("imag")
+        assert fn(3 + 4j) == 4.0
+
+    def test_imag_of_real(self):
+        """imag(5) returns 0 (no imaginary part)."""
+        registry = FunctionRegistry()
+        fn = registry.get("imag")
+        assert fn(5) == 0
+
+    def test_conj_returns_conjugate(self):
+        """conj(3+4j) returns 3-4j."""
+        registry = FunctionRegistry()
+        fn = registry.get("conj")
+        assert fn(3 + 4j) == 3 - 4j
+
+    def test_conj_of_real(self):
+        """conj(5) returns 5 (passthrough for non-complex)."""
+        registry = FunctionRegistry()
+        fn = registry.get("conj")
+        assert fn(5) == 5
+
+    def test_sqrt_complex(self):
+        """sqrt handles complex input via cmath."""
+        registry = FunctionRegistry()
+        fn = registry.get("sqrt")
+        result = fn(-1 + 0j)
+        assert abs(result - 1j) < 1e-10
+
+    def test_abs_complex(self):
+        """abs(3+4j) returns 5.0 (magnitude)."""
+        registry = FunctionRegistry()
+        fn = registry.get("abs")
+        assert fn(3 + 4j) == 5.0
