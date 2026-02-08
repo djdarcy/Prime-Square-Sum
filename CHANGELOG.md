@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.20] - 2026-02-08
+
+### Added
+- **Phase 3C: Algebraic decomposition and recursive relation** in TriSum.lean
+  - `rowValue'_split` — decompose rowValue' into constant-coefficient geometric sum plus linearly-weighted power sum
+  - `stf'` definition — algebraic Finset.sum form of stf using rowValue'
+  - `stf_eq_stf'` — bridge algorithmic stf (List.foldl) to algebraic stf' (Finset.sum), via `list_foldl_add_eq_finset_sum` helper
+  - `rowValue'_succ_add` — recursive relation: rowValue'(b, z+1) in terms of b * rowValue'(b, z) with geometric sum correction, additive form avoids Nat subtraction underflow
+  - `geom_sum_mul_add` — division-free geometric series recursion: b * Σ b^i + 1 = Σ b^i over extended range
+  - `power_sum_reverse` — descending powers equal ascending via sum_flip
+  - Bounded `native_decide` verifications for all new theorems
+- Updated `proofs/README.md` with Phase 3B and 3C theorem documentation
+
+### Design Documents
+- `2026-02-08__06-49-01__DISCUSS_Rnd3_FINAL_ASSESSMENT_rowValue-recursive-relation.md` — collaborate2 final assessment for recursive relation strategy
+- `2026-02-08__07-31-00__full-postmortem_phase-3c-algebraic-decomposition-recursive-relation.md` — Phase 3C postmortem
+
 ## [0.7.16] - 2026-02-07
 
 ### Added

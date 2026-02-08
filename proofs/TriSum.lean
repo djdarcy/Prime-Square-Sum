@@ -305,6 +305,155 @@ theorem rv_eq_rv'_6_3 : rowValue 6 3 = rowValue' 6 3 := by native_decide
 theorem rv_eq_rv'_15_1 : rowValue 15 1 = rowValue' 15 1 := by native_decide
 theorem rv_eq_rv'_15_5 : rowValue 15 5 = rowValue' 15 5 := by native_decide
 
+-- === Phase 3C: Algebraic decomposition of rowValue' ===
+
+/-- Decomposition: rowValue' splits into a constant-coefficient geometric sum
+    plus a linearly-weighted power sum.
+    rowValue'(b,z) = (b - tri z) * Σ b^(z-1-i) + Σ i * b^(z-1-i) -/
+theorem rowValue'_split (b z : Nat) :
+    rowValue' b z =
+    (b - tri z) * (Finset.range z).sum (fun i => b ^ (z - 1 - i)) +
+    (Finset.range z).sum (fun i => i * b ^ (z - 1 - i)) := by
+  unfold rowValue'
+  conv_lhs => arg 2; ext i; rw [Nat.add_mul]
+  rw [Finset.sum_add_distrib]
+  congr 1
+  rw [← Finset.mul_sum]
+
+-- Bounded verification of decomposition
+theorem rowValue'_split_10_3 :
+    rowValue' 10 3 =
+    (10 - tri 3) * ((Finset.range 3).sum (fun i => 10 ^ (2 - i))) +
+    (Finset.range 3).sum (fun i => i * 10 ^ (2 - i)) := by native_decide
+
+theorem rowValue'_split_6_2 :
+    rowValue' 6 2 =
+    (6 - tri 2) * ((Finset.range 2).sum (fun i => 6 ^ (1 - i))) +
+    (Finset.range 2).sum (fun i => i * 6 ^ (1 - i)) := by native_decide
+
+-- === Phase 3C: Algebraic stf and bridge to stf' ===
+
+/-- Convert List.foldl addition to Finset.sum: the standard bridge
+    from algorithmic foldl accumulation to algebraic Finset.sum. -/
+theorem list_foldl_add_eq_finset_sum (f : Nat → Nat) (n : Nat) :
+    (List.range n).foldl (fun acc i => acc + f i) 0 = (Finset.range n).sum f := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [List.range_succ, List.foldl_append, Finset.sum_range_succ]
+    simp only [List.foldl]
+    rw [ih]
+
+/-- Algebraic stf: Finset.sum of rowValue' over all rows.
+    Equivalent to stf but uses rowValue' for algebraic manipulation. -/
+def stf' (b : Nat) : Nat :=
+  (Finset.range (qg b)).sum (fun i => rowValue' b (i + 1))
+
+/-- The algorithmic stf (foldl-based) equals the algebraic stf' (Finset.sum).
+    Bridges the computable definition to a form amenable to algebraic proof. -/
+theorem stf_eq_stf' (b : Nat) : stf b = stf' b := by
+  unfold stf stf'
+  rw [list_foldl_add_eq_finset_sum]
+  apply Finset.sum_congr rfl
+  intro i _
+  exact rowValue_eq_rowValue' b (i + 1)
+
+-- Bounded verification: stf = stf' for known bases
+theorem stf_eq_stf'_6 : stf 6 = stf' 6 := by native_decide
+theorem stf_eq_stf'_10 : stf 10 = stf' 10 := by native_decide
+theorem stf_eq_stf'_15 : stf 15 = stf' 15 := by native_decide
+
+-- === Phase 3C: Recursive relation helpers ===
+
+/-- Geometric sum identity: b * Σ_{i<n} b^i + 1 = Σ_{i<n+1} b^i.
+    Division-free form of the standard geometric series recursion. -/
+theorem geom_sum_mul_add (b n : Nat) :
+    b * (Finset.range n).sum (fun i => b ^ i) + 1 =
+    (Finset.range (n + 1)).sum (fun i => b ^ i) := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [Finset.sum_range_succ, Finset.sum_range_succ, Nat.mul_add,
+        ← pow_succ', add_right_comm, ih]
+
+-- Bounded verification of geometric identity
+theorem geom_sum_mul_add_10_3 :
+    10 * (1 + 10 + 100) + 1 = 1 + 10 + 100 + 1000 := by norm_num
+
+/-- Power sum reindexing: descending powers equal ascending powers.
+    Σ_{i<z} b^(z-1-i) = Σ_{i<z} b^i via sum_flip. -/
+theorem power_sum_reverse (b z : Nat) :
+    (Finset.range z).sum (fun i => b ^ (z - 1 - i)) =
+    (Finset.range z).sum (fun i => b ^ i) := by
+  cases z with
+  | zero => simp
+  | succ n =>
+    rw [show (Finset.range (n + 1)).sum (fun i => b ^ (n + 1 - 1 - i)) =
+            (Finset.range (n + 1)).sum (fun r => (fun k => b ^ k) (n - r)) from by
+      apply Finset.sum_congr rfl; intro i hi
+      have hi' := Finset.mem_range.mp hi
+      congr 1]
+    exact Finset.sum_flip (fun k => b ^ k)
+
+-- === Phase 3C: Recursive relation for rowValue' ===
+
+/-- Recursive relation (additive form): rowValue'(b, z+1) relates to b * rowValue'(b, z)
+    with a geometric sum correction term. The additive form avoids Nat subtraction underflow.
+    Hypothesis: tri(z+1) ≤ b ensures all digit values are non-negative. -/
+theorem rowValue'_succ_add (b z : Nat) (h : tri (z + 1) ≤ b) :
+    rowValue' b (z + 1) + (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i) =
+    b * rowValue' b z + (b - tri z + z) := by
+  simp only [rowValue']
+  -- Step 1: Peel last term from LHS sum
+  rw [Finset.sum_range_succ]
+  -- Note: b^(z+1-1-z) is kernel-defeq to b^0 = 1, so no simp needed
+  -- Step 2: Factor b from remaining z terms
+  have hfact : ∀ i ∈ Finset.range z,
+      (b - tri (z + 1) + i) * b ^ (z + 1 - 1 - i) =
+      b * ((b - tri (z + 1) + i) * b ^ (z - 1 - i)) := by
+    intro i hi
+    have hi' := Finset.mem_range.mp hi
+    rw [show z + 1 - 1 - i = (z - 1 - i) + 1 from by omega, pow_succ]
+    ring
+  rw [Finset.sum_congr rfl hfact, ← Finset.mul_sum]
+  -- Step 3: Decompose RHS sum coefficients: (b-tri z+i) = (b-tri(z+1)+i) + (z+1)
+  have hcoeff : ∀ i, b - tri z + i = (b - tri (z + 1) + i) + (z + 1) := by
+    intro i; have := tri_succ z; omega
+  have hdecomp : (Finset.range z).sum (fun i => (b - tri z + i) * b ^ (z - 1 - i)) =
+      (Finset.range z).sum (fun i => (b - tri (z + 1) + i) * b ^ (z - 1 - i)) +
+      (z + 1) * (Finset.range z).sum (fun i => b ^ (z - 1 - i)) := by
+    simp_rw [hcoeff, Nat.add_mul, Finset.sum_add_distrib, ← Finset.mul_sum]
+  rw [hdecomp, Nat.mul_add]
+  -- Step 4: Both sides have b * Σ(c+i)*b^k as prefix. Align associativity and cancel.
+  rw [add_assoc, add_assoc]
+  congr 1
+  -- Goal: (b-tri(z+1)+z)*b^(z+1-1-z) + (z+1)*Σ_{i<z+1} b^i
+  --     = b*((z+1)*Σ_{i<z} b^(z-1-i)) + (b-tri z+z)
+  -- Step 5: Rewrite descending powers to ascending
+  rw [power_sum_reverse b z]
+  -- Step 6: Replace Σ_{i<z+1} b^i with b*Σ_{i<z} b^i + 1
+  rw [← geom_sum_mul_add b z]
+  -- Step 7: Distribute and commute
+  rw [Nat.mul_add, Nat.mul_one, mul_left_comm (z + 1) b]
+  -- Normalize the last-term power: b^(z+1-1-z) = b^0 = 1
+  rw [show z + 1 - 1 - z = 0 from by omega, pow_zero, mul_one]
+  -- Goal: (b-tri(z+1)+z) + (b*((z+1)*Σ) + (z+1)) = b*((z+1)*Σ) + (b-tri z+z)
+  -- Cancel b*((z+1)*Σ) from both sides
+  rw [← add_assoc, add_comm (b - tri (z + 1) + z), add_assoc]
+  congr 1
+  -- Goal: (b-tri(z+1)+z) + (z+1) = (b-tri z+z)
+  have := tri_succ z
+  omega
+
+-- Bounded verification of recursive relation
+theorem rowValue'_succ_add_10_2 :
+    rowValue' 10 3 + 3 * (1 + 10 + 100) =
+    10 * rowValue' 10 2 + (10 - tri 2 + 2) := by native_decide
+
+theorem rowValue'_succ_add_6_1 :
+    rowValue' 6 2 + 2 * (1 + 6) =
+    6 * rowValue' 6 1 + (6 - tri 1 + 1) := by native_decide
+
 -- ============================================================
 -- PART 5: Bounded Recast Pattern
 -- ============================================================

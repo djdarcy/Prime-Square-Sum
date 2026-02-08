@@ -31,14 +31,33 @@ Triangular number theory and the stf (trisum) function.
 - `deep_tri_n3_triangular` — 55 is triangular because 55 = tri(tri(4)), proved structurally
 - `deep_tri_n4_triangular` — 666 is triangular because 666 = tri(tri(8)), proved structurally
 
+*Algebraic rowValue and bridge lemma (Part 4b):*
+- `rowValue'` — Algebraic Finset.sum definition with positional powers
+- `digitsToNat_arith_seq` — Core bridge: foldl over arithmetic sequence equals Finset.sum with positional weights
+- `rowValue_eq_rowValue'` — General equivalence between algorithmic and algebraic rowValue
+
+*Phase 3C — Algebraic decomposition and recursive relation:*
+- `rowValue'_split` — Decompose rowValue' into constant-coefficient geometric sum plus linearly-weighted power sum
+- `stf'` / `stf_eq_stf'` — Bridge algorithmic stf (List.foldl) to algebraic stf' (Finset.sum)
+- `geom_sum_mul_add` — Division-free geometric series recursion: b * Σ b^i + 1 = Σ b^i over extended range
+- `power_sum_reverse` — Descending powers equal ascending powers via sum_flip
+- `rowValue'_succ_add` — Recursive relation: rowValue'(b, z+1) in terms of b * rowValue'(b, z) with geometric sum correction (additive form, avoids Nat subtraction underflow)
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
+- `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, and recursive relation across bases 6, 10, 15
 
 *Dependency chain:*
 ```
 tri_zero (base case) → tri_succ (recursion) → two_mul_tri (induction)
     → tri_is_triangular (correctness) → tri_tri_is_triangular (composition)
     → deep_tri_n3_triangular (55) + deep_tri_n4_triangular (666)
+
+rowValue → rowValue_eq_rowValue' → rowValue'
+    → rowValue'_split (decomposition)
+    → stf_eq_stf' (algebraic stf bridge)
+    → rowValue'_succ_add (recursive relation)
+        ← geom_sum_mul_add + power_sum_reverse (helpers)
 ```
 
 **All theorems fully machine-verified** (zero `sorry`).
