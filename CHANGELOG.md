@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [0.7.21] - 2026-02-08/09
 
 ### Added
+- **Step 4D: Last row rv' closed form (weighted power sum)** in TriSum.lean
+  - `weighted_sum_split` — Σ_{i<r}(r-1-i)·b^i + Σ_{i<r} i·b^i = (r-1)·Σ_{i<r} b^i. Decomposes the weighted sum using (r-1-i)+i = r-1 for i < r, via `sum_add_distrib` + `sum_congr` + `omega`. No hypotheses needed.
+  - `weighted_sum_closed` — **Main result**: (b-1)² · Σ_{i<r}(r-1-i)·b^i + (r-1)·(b-1) + b = b^r. Nat-safe additive identity for the last row weighted power sum. 4-step chain combining `weighted_sum_split`, `arith_geom_sum` (4B), and `geom_sum_pred_mul_add_one` (4C). Uses `cases b` + `cases r` + `pow_succ` + `ring` for the key algebraic step, then `omega` over opaque nonlinear atoms. Requires `hb : 1 ≤ b`, `hr : 1 ≤ r`.
+  - Bounded `native_decide` verifications for (b=10,r=4), (b=6,r=3), (b=15,r=5), plus weighted_sum_split check for (b=10,r=4)
 - **Step 4C: Correction sum C closed form** in TriSum.lean
   - `geom_sum_pred_mul_add_one` — Helper: (b-1) * Σ_{i<n} b^i + 1 = b^n. Nat-safe additive form of the standard (b-1)·G(n) = b^n - 1. Proved by `cases b` + induction with `add_right_comm` + `pow_succ` + `ring`. Requires `hb : 1 ≤ b`.
   - `correction_sum_intermediate` — **(b-1)·C + tri(r) = Σ_{j<r+1} j·b^j**. Connects the correction sum C to the arithmetic-geometric sum via induction on r. Key techniques: explicit `have` bindings for ambiguous `sum_range_succ`, `mul_left_comm` for coefficient extraction, `ring` for factoring with opaque Finset.sum variables.
@@ -26,6 +30,7 @@ All notable changes to this project will be documented in this file.
   - `tests/one-offs/thinking/2026-02-09__step4b-step-lemma-derivation.py` — Step lemma derivation and Nat edge case analysis
   - `tests/one-offs/thinking/2026-02-09__step4b-induction-proof-mechanics.py` — Full proof chain verification with omega atom analysis
   - `tests/one-offs/thinking/2026-02-09__step4c-correction-sum-closed-form.py` — Step 4C identity verification (10 categories, 7 bases)
+  - `tests/one-offs/thinking/2026-02-09__step4d-last-row-rv-closed-form.py` — Step 4D identity verification (6 categories, 11 bases)
 
 ### Design Documents
 - `2026-02-08__14-12-48__dev-workflow_boundary-sum-B-closed-form-and-Fb-analysis.md` — Analysis of boundary sum proof strategies and F(b) closed-form structure
@@ -33,6 +38,7 @@ All notable changes to this project will be documented in this file.
 - `2026-02-09__00-45-08__full-postmortem_step4a-boundary-sum-and-4b-roadmap.md` — Step 4A postmortem and Step 4B roadmap
 - `2026-02-09__02-43-09__dev-workflow_step4c-correction-sum-closed-form.md` — Step 4C implementation planning and algebraic decomposition chain
 - `2026-02-09__10-03-19__full-postmortem_step4c-correction-sum-closed-form.md` — Step 4C postmortem
+- `2026-02-09__10-43-35__dev-workflow_step4d-last-row-rv-closed-form.md` — Step 4D implementation planning
 
 ## [0.7.20] - 2026-02-08
 

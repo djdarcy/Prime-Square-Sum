@@ -64,6 +64,10 @@ Triangular number theory and the stf (trisum) function.
 - `correction_sum_intermediate` — Intermediate identity: (b-1)·C + tri(r) = Σ_{j<r+1} j·b^j. Connects the correction sum C = Σ_{z<r}(z+1)·G(z+1) to the arithmetic-geometric sum. Proved by induction on r using explicit `have` bindings for `sum_range_succ` disambiguation, `mul_left_comm` for coefficient extraction, and `ring` for factoring with opaque Finset.sum variables.
 - `correction_sum_closed` — **Correction sum C closed form**: (b-1)² · ((b-1)·C + tri(r)) + (r+1)·b^(r+1) = r·b^(r+2) + b. Nat-safe additive identity combining `correction_sum_intermediate` with `arith_geom_sum`. Two-line proof via rewrite + exact.
 
+*Step 4D — Last row rv' closed form (weighted power sum):*
+- `weighted_sum_split` — Weighted sum decomposition: Σ_{i<r}(r-1-i)·b^i + Σ_{i<r} i·b^i = (r-1)·Σ_{i<r} b^i. Each summand satisfies (r-1-i) + i = r-1 for i < r. Via `sum_add_distrib` + `sum_congr` + `omega`.
+- `weighted_sum_closed` — **Last row closed form**: (b-1)² · Σ_{i<r}(r-1-i)·b^i + (r-1)·(b-1) + b = b^r. Nat-safe additive identity for the weighted power sum appearing in the last row of the triangular digit arrangement. 4-step chain: multiply `weighted_sum_split` by (b-1)², factor via `geom_sum_pred_mul_add_one`, algebraic step via `cases b` + `cases r` + `pow_succ` + `ring`, then `omega` combines all hypotheses. Holds for all b ≥ 1, r ≥ 1.
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
 - `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, recursive relation, index shift, and telescoping across bases 6, 10, 15
@@ -90,7 +94,7 @@ six_mul_tri → boundary_step → boundary_sum_closed (boundary sum B)
 arith_geom_sum (arithmetic-geometric sum, Step 4B bottleneck)
     → correction_sum_intermediate (Step 4C, via geom_sum_pred_mul_add_one)
         → correction_sum_closed (Step 4C, combines with arith_geom_sum)
-    → [future] last row rv' closed form (Step 4D, also uses arith_geom_sum)
+    → weighted_sum_split + weighted_sum_closed (Step 4D, also uses geom_sum_pred_mul_add_one)
     → [future] full stf = F(b) (Step 4F, combines 4A + 4B + 4C + 4D)
 ```
 

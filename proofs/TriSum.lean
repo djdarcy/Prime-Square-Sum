@@ -826,6 +826,80 @@ theorem correction_sum_closed_6_3 :
     3 * 6 ^ 5 + 6 := by native_decide
 
 -- ============================================================
+-- Step 4D: Last Row rv' Closed Form (Weighted Power Sum)
+-- ============================================================
+
+/-- Weighted sum split: Σ_{i<r}(r-1-i)·b^i + Σ_{i<r} i·b^i = (r-1)·Σ_{i<r} b^i.
+    Each summand satisfies (r-1-i) + i = r-1 for i < r. -/
+theorem weighted_sum_split (b r : Nat) :
+    (Finset.range r).sum (fun i => (r - 1 - i) * b ^ i) +
+    (Finset.range r).sum (fun i => i * b ^ i) =
+    (r - 1) * (Finset.range r).sum (fun i => b ^ i) := by
+  rw [← Finset.sum_add_distrib, Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro i hi
+  have him : i < r := Finset.mem_range.mp hi
+  rw [← Nat.add_mul]
+  congr 1
+  omega
+
+-- Bounded verification of weighted sum split
+theorem weighted_sum_split_10_4 :
+    (Finset.range 4).sum (fun i => (3 - i) * 10 ^ i) +
+    (Finset.range 4).sum (fun i => i * 10 ^ i) =
+    3 * (Finset.range 4).sum (fun i => 10 ^ i) := by native_decide
+
+/-- Last row closed form (Nat-safe additive identity):
+    (b-1)² · Σ_{i<r}(r-1-i)·b^i + (r-1)·(b-1) + b = b^r.
+    The weighted power sum identity for the last row of the triangular
+    digit arrangement. Holds for all b ≥ 1, r ≥ 1. -/
+theorem weighted_sum_closed (b r : Nat) (hb : 1 ≤ b) (hr : 1 ≤ r) :
+    (b - 1) ^ 2 * (Finset.range r).sum (fun i => (r - 1 - i) * b ^ i) +
+    (r - 1) * (b - 1) + b = b ^ r := by
+  have hsplit := weighted_sum_split b r
+  have hag := arith_geom_sum b r hr
+  have hgeom := geom_sum_pred_mul_add_one b r hb
+  -- hsplit2: (b-1)²·W + (b-1)²·AG = (r-1)·(b-1)²·G
+  have hsplit2 : (b - 1) ^ 2 * (Finset.range r).sum (fun i => (r - 1 - i) * b ^ i) +
+      (b - 1) ^ 2 * (Finset.range r).sum (fun i => i * b ^ i) =
+      (r - 1) * ((b - 1) ^ 2 * (Finset.range r).sum (fun i => b ^ i)) := by
+    rw [← mul_add, hsplit]; ring
+  -- hfactor: (r-1)·(b-1)²·G + (r-1)·(b-1) = (r-1)·(b-1)·b^r
+  have hfactor : (r - 1) * ((b - 1) ^ 2 * (Finset.range r).sum (fun i => b ^ i)) +
+      (r - 1) * (b - 1) =
+      (r - 1) * (b - 1) * b ^ r := by
+    have : (r - 1) * ((b - 1) ^ 2 * (Finset.range r).sum (fun i => b ^ i)) +
+        (r - 1) * (b - 1) =
+        (r - 1) * (b - 1) * ((b - 1) * (Finset.range r).sum (fun i => b ^ i) + 1) := by ring
+    rw [this, hgeom]
+  -- hkey: (r-1)·(b-1)·b^r + r·b^r = b^r + (r-1)·b^(r+1)
+  have hkey : (r - 1) * (b - 1) * b ^ r + r * b ^ r =
+      b ^ r + (r - 1) * b ^ (r + 1) := by
+    cases b with
+    | zero => omega
+    | succ c =>
+      cases r with
+      | zero => omega
+      | succ n =>
+        simp only [Nat.succ_sub_one]
+        rw [pow_succ]; ring
+  -- omega combines hsplit2, hfactor, hag, hkey → goal
+  omega
+
+-- Bounded verification of weighted sum closed form
+theorem weighted_sum_closed_10_4 :
+    (10 - 1) ^ 2 * (Finset.range 4).sum (fun i => (3 - i) * 10 ^ i) +
+    3 * 9 + 10 = 10 ^ 4 := by native_decide
+
+theorem weighted_sum_closed_6_3 :
+    (6 - 1) ^ 2 * (Finset.range 3).sum (fun i => (2 - i) * 6 ^ i) +
+    2 * 5 + 6 = 6 ^ 3 := by native_decide
+
+theorem weighted_sum_closed_15_5 :
+    (15 - 1) ^ 2 * (Finset.range 5).sum (fun i => (4 - i) * 15 ^ i) +
+    4 * 14 + 15 = 15 ^ 5 := by native_decide
+
+-- ============================================================
 -- PART 5: Bounded Recast Pattern
 -- ============================================================
 
