@@ -400,6 +400,21 @@ theorem power_sum_reverse (b z : Nat) :
       congr 1]
     exact Finset.sum_flip (fun k => b ^ k)
 
+/-- Weighted power sum reindexing: descending weighted powers equal ascending complementary weights.
+    Σ_{i<z} i·b^(z-1-i) = Σ_{i<z} (z-1-i)·b^i via sum_flip. -/
+theorem weighted_power_sum_reverse (b z : Nat) :
+    (Finset.range z).sum (fun i => i * b ^ (z - 1 - i)) =
+    (Finset.range z).sum (fun i => (z - 1 - i) * b ^ i) := by
+  cases z with
+  | zero => simp
+  | succ n =>
+    rw [show (Finset.range (n + 1)).sum (fun i => i * b ^ (n + 1 - 1 - i)) =
+            (Finset.range (n + 1)).sum (fun r => (fun k => (n - k) * b ^ k) (n - r)) from by
+      apply Finset.sum_congr rfl; intro i hi
+      have hi' := Finset.mem_range.mp hi
+      congr 1; omega]
+    exact Finset.sum_flip (fun k => (n - k) * b ^ k)
+
 -- === Phase 3C: Recursive relation for rowValue' ===
 
 /-- Recursive relation (additive form): rowValue'(b, z+1) relates to b * rowValue'(b, z)
@@ -898,6 +913,75 @@ theorem weighted_sum_closed_6_3 :
 theorem weighted_sum_closed_15_5 :
     (15 - 1) ^ 2 * (Finset.range 5).sum (fun i => (4 - i) * 15 ^ i) +
     4 * 14 + 15 = 15 ^ 5 := by native_decide
+
+-- ============================================================
+-- Step 4E: Per-Row Closed Form
+-- ============================================================
+-- Prove the Nat-safe additive identity for the per-row closed form:
+-- (b-1)^2 * rowValue'(b,z) + (b - tri z)*(b-1) + (z-1)*(b-1) + b
+--   = (b - tri z)*(b-1)*b^z + b^z
+--
+-- Equivalent to: 2*(b-1)^2 * rv'(b,z) = N(b,z) where N is the
+-- Mathematica/sympy polynomial. Avoids division and negative terms
+-- by using additive form.
+--
+-- Proof: direct assembly from rowValue'_split + power_sum_reverse +
+-- weighted_power_sum_reverse + geom_sum_pred_mul_add_one +
+-- weighted_sum_closed. No induction needed.
+
+/-- Per-row closed form: Nat-safe additive identity giving a closed form
+    for each individual rowValue'(b,z). Combines the decomposition
+    (rowValue'_split) with the geometric identity (geom_sum_pred_mul_add_one)
+    and weighted sum identity (weighted_sum_closed). -/
+theorem rowValue'_closed_form (b z : Nat) (hb : 2 ≤ b) (hz : 1 ≤ z) :
+    (b - 1) ^ 2 * rowValue' b z + (b - tri z) * (b - 1) + (z - 1) * (b - 1) + b =
+    (b - tri z) * (b - 1) * b ^ z + b ^ z := by
+  -- Step 1: Decompose rv' and flip to ascending powers
+  have hsplit := rowValue'_split b z
+  rw [power_sum_reverse b z, weighted_power_sum_reverse b z] at hsplit
+  -- hsplit: rv'(b,z) = (b - tri z) * G_asc + W_asc
+  -- Step 2: Get closed forms for sub-components
+  have hweighted := weighted_sum_closed b z (by omega) hz
+  -- hweighted: (b-1)^2 * W_asc + (z-1)*(b-1) + b = b^z
+  have hgeom := geom_sum_pred_mul_add_one b z (by omega)
+  -- hgeom: (b-1) * G_asc + 1 = b^z
+  -- Step 3: Scale geometric identity by (b-1)
+  have hgeom2 : (b - 1) ^ 2 * (Finset.range z).sum (fun i => b ^ i) + (b - 1) =
+      (b - 1) * b ^ z := by
+    have : (b - 1) ^ 2 * (Finset.range z).sum (fun i => b ^ i) + (b - 1) =
+        (b - 1) * ((b - 1) * (Finset.range z).sum (fun i => b ^ i) + 1) := by ring
+    rw [this, hgeom]
+  -- Step 4: Distribute the split into (b-1)^2 * rv'
+  have hdist : (b - 1) ^ 2 * rowValue' b z =
+      (b - tri z) * ((b - 1) ^ 2 * (Finset.range z).sum (fun i => b ^ i)) +
+      (b - 1) ^ 2 * (Finset.range z).sum (fun i => (z - 1 - i) * b ^ i) := by
+    rw [hsplit]; ring
+  -- Step 5: Resolve (b-tri z) * geometric part
+  have hgeom3 : (b - tri z) * ((b - 1) ^ 2 * (Finset.range z).sum (fun i => b ^ i)) +
+      (b - tri z) * (b - 1) = (b - tri z) * (b - 1) * b ^ z := by
+    have : (b - tri z) * ((b - 1) ^ 2 * (Finset.range z).sum (fun i => b ^ i)) +
+        (b - tri z) * (b - 1) =
+        (b - tri z) * ((b - 1) ^ 2 * (Finset.range z).sum (fun i => b ^ i) + (b - 1)) := by ring
+    rw [this, hgeom2]; ring
+  -- Step 6: omega combines everything
+  omega
+
+-- Bounded verifications
+theorem rowValue'_closed_form_10_1 :
+    (10 - 1) ^ 2 * rowValue' 10 1 + (10 - tri 1) * (10 - 1) + 0 * (10 - 1) + 10 =
+    (10 - tri 1) * (10 - 1) * 10 ^ 1 + 10 ^ 1 := by native_decide
+
+theorem rowValue'_closed_form_10_4 :
+    (10 - 1) ^ 2 * rowValue' 10 4 + (10 - tri 4) * (10 - 1) + 3 * (10 - 1) + 10 =
+    (10 - tri 4) * (10 - 1) * 10 ^ 4 + 10 ^ 4 := by native_decide
+
+theorem rowValue'_closed_form_6_3 :
+    (6 - 1) ^ 2 * rowValue' 6 3 + (6 - tri 3) * (6 - 1) + 2 * (6 - 1) + 6 =
+    (6 - tri 3) * (6 - 1) * 6 ^ 3 + 6 ^ 3 := by native_decide
+
+theorem rowValue'_closed_form_15_5 :
+    (15 - 1) ^ 2 * rowValue' 15 5 + (15 - tri 5) * (15 - 1) + 4 * (15 - 1) + 15 =
+    (15 - tri 5) * (15 - 1) * 15 ^ 5 + 15 ^ 5 := by native_decide
 
 -- ============================================================
 -- PART 5: Bounded Recast Pattern

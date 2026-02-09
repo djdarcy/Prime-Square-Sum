@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [0.7.21] - 2026-02-08/09
 
 ### Added
+- **Step 4E: Per-row closed form (rowValue' assembly)** in TriSum.lean
+  - `weighted_power_sum_reverse` — Weighted power sum flip: Σ_{i<z} i·b^(z-1-i) = Σ_{i<z} (z-1-i)·b^i. Follows `power_sum_reverse` pattern via `sum_congr` + `omega` + `sum_flip`. No hypotheses needed.
+  - `rowValue'_closed_form` — **Per-row closed form**: (b-1)² · rv'(b,z) + (b-tri z)·(b-1) + (z-1)·(b-1) + b = (b-tri z)·(b-1)·b^z + b^z. Nat-safe additive identity for the per-row value. Direct assembly from existing building blocks — no induction or ℤ-casting needed. Decomposes via `rowValue'_split`, flips via `power_sum_reverse` + `weighted_power_sum_reverse`, substitutes `geom_sum_pred_mul_add_one` + `weighted_sum_closed`, then `omega` closes over opaque atoms with intermediate `ring` factoring. Requires `hb : 2 ≤ b`, `hz : 1 ≤ z`.
+  - Bounded `native_decide` verifications for (b=10,z=1), (b=10,z=4), (b=6,z=3), (b=15,z=5)
 - **Step 4D: Last row rv' closed form (weighted power sum)** in TriSum.lean
   - `weighted_sum_split` — Σ_{i<r}(r-1-i)·b^i + Σ_{i<r} i·b^i = (r-1)·Σ_{i<r} b^i. Decomposes the weighted sum using (r-1-i)+i = r-1 for i < r, via `sum_add_distrib` + `sum_congr` + `omega`. No hypotheses needed.
   - `weighted_sum_closed` — **Main result**: (b-1)² · Σ_{i<r}(r-1-i)·b^i + (r-1)·(b-1) + b = b^r. Nat-safe additive identity for the last row weighted power sum. 4-step chain combining `weighted_sum_split`, `arith_geom_sum` (4B), and `geom_sum_pred_mul_add_one` (4C). Uses `cases b` + `cases r` + `pow_succ` + `ring` for the key algebraic step, then `omega` over opaque nonlinear atoms. Requires `hb : 1 ≤ b`, `hr : 1 ≤ r`.
@@ -23,7 +27,12 @@ All notable changes to this project will be documented in this file.
   - `boundary_step` (private) — Induction step: 6*(b - tri(n) + n) + 3*n*(n-1) = 6*b, uses `six_mul_tri` + `omega` with `show` normalization
   - `boundary_sum_closed` — **Main result**: 6*B + r*(r-1)*(r-2) = 6*r*b where B = Σ_{z<r} (b - tri(z) + z). Nat-safe additive form avoids division and subtraction underflow. Proved by induction with cubic decomposition (`ring`) and RHS expansion (`ring`), closed by `omega` over opaque nonlinear atoms.
   - Bounded `native_decide` verifications for b = 6, 10, 15
+- **Critical path classification** in proofs/README.md — Added table showing which theorems are on the direct path to F(primesum(k₁,p₁)) = primesum(k₂,p₂), with Foundation/Bridge/Algebraic stf/Closed forms/Assembly tiers and supporting/informational categories
 - Python verification scripts:
+  - `tests/one-offs/thinking/2026-02-09__step4e-per-row-closed-form.py` — Step 4E identity verification (5 categories: Nat-safe identity, N(b,z) polynomial cross-check, weighted reverse, decomposition chain, concrete values)
+  - `tests/one-offs/thinking/2026-02-09__step4e-approach-derivation.py` — Step 4E approach exploration: N(b,z) polynomial, Nat-safe sign separation, building-block assembly derivation, concrete proof chain walkthrough
+  - `tests/one-offs/thinking/2026-02-09__step4d-building-block-chain-verify.py` — Step 4D building block chain: hsplit/hfactor/hkey/hag/hgeom combination verification
+  - `tests/one-offs/thinking/2026-02-09__triangular-primesum-chain-conjecture.py` — Triangular primesum chain conjecture test (falsified: primesum(43,p) is NOT triangular for p=1..5)
   - `tests/one-offs/thinking/2026-02-08__boundary-sum-B-closed-form-verify.py` — Step 4A numerical verification
   - `tests/one-offs/thinking/2026-02-08__phase3c-algebraic-properties-verify.py` — Phase 3C theorem verification (6 theorems, 87+ test cases)
   - `tests/one-offs/thinking/2026-02-09__arith-geom-sum-exploration.py` — Step 4B identity exploration (both standard and Nat-safe forms)
@@ -39,6 +48,8 @@ All notable changes to this project will be documented in this file.
 - `2026-02-09__02-43-09__dev-workflow_step4c-correction-sum-closed-form.md` — Step 4C implementation planning and algebraic decomposition chain
 - `2026-02-09__10-03-19__full-postmortem_step4c-correction-sum-closed-form.md` — Step 4C postmortem
 - `2026-02-09__10-43-35__dev-workflow_step4d-last-row-rv-closed-form.md` — Step 4D implementation planning
+- `2026-02-09__13-47-28__dev-workflow_step4e-assessment-and-next-steps.md` — Step 4E assessment, triangular primesum chain conjecture (falsified), core theorem classification
+- `2026-02-09__16-57-43__full-postmortem_step4e-per-row-closed-form.md` — Step 4E postmortem
 
 ## [0.7.20] - 2026-02-08
 

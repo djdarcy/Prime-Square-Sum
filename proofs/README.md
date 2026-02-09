@@ -68,6 +68,10 @@ Triangular number theory and the stf (trisum) function.
 - `weighted_sum_split` — Weighted sum decomposition: Σ_{i<r}(r-1-i)·b^i + Σ_{i<r} i·b^i = (r-1)·Σ_{i<r} b^i. Each summand satisfies (r-1-i) + i = r-1 for i < r. Via `sum_add_distrib` + `sum_congr` + `omega`.
 - `weighted_sum_closed` — **Last row closed form**: (b-1)² · Σ_{i<r}(r-1-i)·b^i + (r-1)·(b-1) + b = b^r. Nat-safe additive identity for the weighted power sum appearing in the last row of the triangular digit arrangement. 4-step chain: multiply `weighted_sum_split` by (b-1)², factor via `geom_sum_pred_mul_add_one`, algebraic step via `cases b` + `cases r` + `pow_succ` + `ring`, then `omega` combines all hypotheses. Holds for all b ≥ 1, r ≥ 1.
 
+*Step 4E — Per-row closed form (rowValue' assembly):*
+- `weighted_power_sum_reverse` — Weighted power sum flip: Σ_{i<z} i·b^(z-1-i) = Σ_{i<z} (z-1-i)·b^i. Follows `power_sum_reverse` pattern via `sum_congr` + `omega` + `sum_flip`. No hypotheses needed.
+- `rowValue'_closed_form` — **Per-row closed form**: (b-1)² · rv'(b,z) + (b-tri z)·(b-1) + (z-1)·(b-1) + b = (b-tri z)·(b-1)·b^z + b^z. Direct assembly from existing building blocks: `rowValue'_split` decomposes, `power_sum_reverse` + `weighted_power_sum_reverse` flip to ascending, `geom_sum_pred_mul_add_one` + `weighted_sum_closed` provide closed forms, `ring` pre-factors opaque atoms, `omega` closes. No induction or ℤ-casting needed. Requires `hb : 2 ≤ b`, `hz : 1 ≤ z`.
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
 - `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, recursive relation, index shift, and telescoping across bases 6, 10, 15
@@ -95,8 +99,28 @@ arith_geom_sum (arithmetic-geometric sum, Step 4B bottleneck)
     → correction_sum_intermediate (Step 4C, via geom_sum_pred_mul_add_one)
         → correction_sum_closed (Step 4C, combines with arith_geom_sum)
     → weighted_sum_split + weighted_sum_closed (Step 4D, also uses geom_sum_pred_mul_add_one)
-    → [future] full stf = F(b) (Step 4F, combines 4A + 4B + 4C + 4D)
+
+rowValue'_split + power_sum_reverse + weighted_power_sum_reverse
+    + geom_sum_pred_mul_add_one + weighted_sum_closed
+    → rowValue'_closed_form (Step 4E, direct assembly)
+    → [future] full stf = F(b) (Step 4F, combines 4A + 4B + 4C + 4D via telescoping)
 ```
+
+*Critical path to stf(b) = F(b) closed form:*
+
+The theorems below are on the direct path to proving `F(primesum(k₁,p₁)) = primesum(k₂,p₂)` — the constraint equation connecting triangular structure to prime structure.
+
+| Role | Theorems |
+|------|----------|
+| **Foundation** | `tri_zero`, `tri_succ`, `two_mul_tri` |
+| **Bridge** | `rowValue_eq_rowValue'` (algorithmic → algebraic) |
+| **Algebraic stf** | `stf_eq_stf'`, `stf'_telescope` |
+| **Closed forms** | `boundary_sum_closed` (4A), `arith_geom_sum` (4B), `correction_sum_closed` (4C), `weighted_sum_closed` (4D), `rowValue'_closed_form` (4E) |
+| **Assembly** | [Step 4F — combines 4A + 4B + 4C + 4D + 4E via telescoping] |
+
+Supporting theorems (used by the critical path but not on it directly): `six_mul_tri`, `boundary_step`, `geom_sum_pred_mul_add_one`, `weighted_sum_split`, `weighted_power_sum_reverse`, `rowValue'_split`, `rowValue'_succ_add`, `geom_sum_mul_add_one`, `power_sum_reverse`, `sum_rowValue'_succ_eq`, `rowValue'_sum_index_shift`, `correction_sum_intermediate`.
+
+Not on the F(b) path: `power_sum_closed` (proved but bypassed by Nat-safe approach), `tri_is_triangular` / `tri_tri_is_triangular` (used by Core.lean bridge, not F(b)), concrete evaluations (`tri_two`, `tri_four`, etc.).
 
 **All theorems fully machine-verified** (zero `sorry`).
 
