@@ -2442,3 +2442,253 @@ class TestImaginaryLiterals:
         """'ii' parser does NOT accept single 'i' suffix (2i)."""
         with pytest.raises(ParseError):
             parser_ii.parse("verify 2i == complex(0, 2)")
+
+
+# =============================================================================
+# Sequence Enumeration Tests (Issue #36)
+# =============================================================================
+
+class TestSequenceEnumeration:
+    """Tests for bare-term (no comparison) enumeration with for_any."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_for_any_bare_term_parses(self, parser):
+        """Grammar accepts for_any with bare term (no comparison)."""
+        ast = parser.parse("for_any primesum(n,2)")
+        assert ast.quantifier == "for_any"
+        assert isinstance(ast.body, FunctionCall)
+
+    def test_for_any_bare_arithmetic_parses(self, parser):
+        """Grammar accepts for_any with bare arithmetic expression."""
+        ast = parser.parse("for_any n**2 + 1")
+        assert ast.quantifier == "for_any"
+        assert isinstance(ast.body, BinaryOp)
+
+    def test_for_any_bare_term_enumerates_values(self, parser, evaluator):
+        """for_any <bare term> yields {var: val, __value__: computed}."""
+        expr = parser.parse("for_any n**2")
+        matches = list(find_matches(expr, evaluator, {"n": 5}))
+        assert len(matches) == 5
+        assert matches[0] == {"n": 1, "__value__": 1}
+        assert matches[1] == {"n": 2, "__value__": 4}
+        assert matches[2] == {"n": 3, "__value__": 9}
+        assert matches[3] == {"n": 4, "__value__": 16}
+        assert matches[4] == {"n": 5, "__value__": 25}
+
+    def test_for_any_bare_function_enumerates(self, parser, evaluator):
+        """for_any primesum(n,2) enumerates computed values."""
+        expr = parser.parse("for_any primesum(n,2)")
+        matches = list(find_matches(expr, evaluator, {"n": 3}))
+        assert len(matches) == 3
+        # primesum(1,2) = 2^2 = 4
+        assert matches[0]["n"] == 1
+        assert matches[0]["__value__"] == 4
+        # primesum(2,2) = 2^2 + 3^2 = 13
+        assert matches[1]["n"] == 2
+        assert matches[1]["__value__"] == 13
+
+    def test_for_any_bare_multi_var(self, parser, evaluator):
+        """for_any <bare term> with multiple free variables uses Cartesian product."""
+        expr = parser.parse("for_any n + m")
+        matches = list(find_matches(expr, evaluator, {"m": 2, "n": 2}))
+        # Cartesian product: (m=1,n=1), (m=1,n=2), (m=2,n=1), (m=2,n=2)
+        assert len(matches) == 4
+        values = [(m["m"], m["n"], m["__value__"]) for m in matches]
+        assert (1, 1, 2) in values
+        assert (1, 2, 3) in values
+        assert (2, 1, 3) in values
+        assert (2, 2, 4) in values
+
+    def test_for_any_comparison_unchanged(self, parser, evaluator):
+        """for_any with comparison still works as before (boolean filter)."""
+        expr = parser.parse("for_any n**2 == 9")
+        matches = list(find_matches(expr, evaluator, {"n": 10}))
+        assert len(matches) == 1
+        assert matches[0] == {"n": 3}
+        assert "__value__" not in matches[0]
+
+    def test_for_any_bare_no_free_vars_error(self, parser, evaluator):
+        """for_any with bare term but no free vars raises ValueError."""
+        expr = parser.parse("for_any 2 + 3")
+        with pytest.raises(ValueError, match="requires free variables"):
+            list(find_matches(expr, evaluator, {}))
+
+    def test_does_exist_bare_term_error(self, parser, evaluator):
+        """does_exist with bare term (no comparison) raises ValueError."""
+        expr = parser.parse("does_exist n**2")
+        with pytest.raises(ValueError, match="requires a comparison"):
+            list(find_matches(expr, evaluator, {"n": 10}))
+
+    def test_verify_bare_term_truthy(self, parser, evaluator):
+        """verify with bare term evaluates truthiness: nonzero → true."""
+        expr = parser.parse("verify 7")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_verify_bare_term_falsy(self, parser, evaluator):
+        """verify with bare term evaluates truthiness: zero → false."""
+        expr = parser.parse("verify 0")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_verify_bare_function_truthy(self, parser, evaluator):
+        """verify primesum(7,2) → true (666 is truthy)."""
+        expr = parser.parse("verify primesum(7,2)")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_for_any_boolean_with_comparison_unchanged(self, parser, evaluator):
+        """for_any with boolean AND containing comparisons still works."""
+        expr = parser.parse("for_any n > 0 and n**2 == 9")
+        matches = list(find_matches(expr, evaluator, {"n": 10}))
+        assert len(matches) == 1
+        assert matches[0] == {"n": 3}
+
+
+# =============================================================================
+# Solve Directive Tests (Issue #51 Phase 1)
+# =============================================================================
+
+class TestSolveDirective:
+    """Tests for the solve directive (calculator mode, enumeration, search)."""
+
+    @pytest.fixture
+    def parser(self):
+        return ExpressionParser()
+
+    @pytest.fixture
+    def registry(self):
+        return FunctionRegistry()
+
+    @pytest.fixture
+    def evaluator(self, registry):
+        return ExpressionEvaluator(registry)
+
+    def test_solve_parses(self, parser):
+        """Grammar accepts solve keyword."""
+        ast = parser.parse("solve (1 + 2) ** 2")
+        assert ast.quantifier == "solve"
+
+    def test_solve_calculator_mode(self, parser, evaluator):
+        """solve <bare term> with no free vars → calculator mode."""
+        expr = parser.parse("solve (1 + 2) ** 2 * 3")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert len(matches) == 1
+        assert matches[0]["__solve_result__"] == 27
+
+    def test_solve_calculator_function(self, parser, evaluator):
+        """solve primesum(7,2) → 666."""
+        expr = parser.parse("solve primesum(7,2)")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__solve_result__"] == 666
+
+    def test_solve_verify_mode(self, parser, evaluator):
+        """solve <comparison> with no free vars → verify-like truth check."""
+        expr = parser.parse("solve primesum(7,2) == 666")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+    def test_solve_verify_false(self, parser, evaluator):
+        """solve <comparison> false case."""
+        expr = parser.parse("solve 2 + 2 == 5")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is False
+
+    def test_solve_enumeration_mode(self, parser, evaluator):
+        """solve <bare term> with free vars → value enumeration."""
+        expr = parser.parse("solve n ** 2")
+        matches = list(find_matches(expr, evaluator, {"n": 4}))
+        assert len(matches) == 4
+        assert matches[0] == {"n": 1, "__value__": 1}
+        assert matches[1] == {"n": 2, "__value__": 4}
+        assert matches[2] == {"n": 3, "__value__": 9}
+        assert matches[3] == {"n": 4, "__value__": 16}
+
+    def test_solve_comparison_with_free_vars(self, parser, evaluator):
+        """solve <comparison> with free vars → brute-force search (like does_exist)."""
+        expr = parser.parse("solve n ** 2 == 25")
+        matches = list(find_matches(expr, evaluator, {"n": 10}))
+        assert len(matches) == 1
+        assert matches[0] == {"n": 5}
+
+    def test_implicit_calculator_mode(self, parser, evaluator):
+        """No quantifier + bare term + no free vars → implicit solve."""
+        expr = parser.parse("(1 + 2) ** 2 * 3")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__solve_result__"] == 27
+
+    def test_implicit_calculator_function(self, parser, evaluator):
+        """primesum(7,2) with no quantifier → implicit solve → 666."""
+        expr = parser.parse("primesum(7,2)")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__solve_result__"] == 666
+
+    def test_implicit_verify_unchanged(self, parser, evaluator):
+        """No quantifier + comparison + no free vars → still implicit verify."""
+        expr = parser.parse("primesum(7,2) == 666")
+        matches = list(find_matches(expr, evaluator, {}))
+        assert matches[0]["__verify_result__"] is True
+
+
+# =============================================================================
+# Format Match Tests for New Output Modes
+# =============================================================================
+
+class TestFormatMatchNewModes:
+    """Tests for format_match with solve/calculator and value enumeration output."""
+
+    def test_solve_result_text(self):
+        from utils.cli import format_match
+        result = format_match({"__solve_result__": 27}, "text")
+        assert result == "27"
+
+    def test_solve_result_json(self):
+        import json
+        from utils.cli import format_match
+        result = format_match({"__solve_result__": 666}, "json")
+        parsed = json.loads(result)
+        assert parsed["result"] == 666
+
+    def test_solve_result_csv(self):
+        from utils.cli import format_match
+        result = format_match({"__solve_result__": 42}, "csv")
+        assert result == "42"
+
+    def test_value_enumeration_text(self):
+        from utils.cli import format_match
+        result = format_match({"n": 3, "__value__": 9}, "text")
+        assert result == "n=3: 9"
+
+    def test_value_enumeration_json(self):
+        import json
+        from utils.cli import format_match
+        result = format_match({"n": 3, "__value__": 9}, "json")
+        parsed = json.loads(result)
+        assert parsed["variables"] == {"n": 3}
+        assert parsed["value"] == 9
+
+    def test_value_enumeration_csv(self):
+        from utils.cli import format_match
+        result = format_match({"n": 3, "__value__": 9}, "csv")
+        assert result == "3,9"
+
+    def test_value_enumeration_multi_var_text(self):
+        from utils.cli import format_match
+        result = format_match({"m": 2, "n": 3, "__value__": 5}, "text")
+        assert result == "m=2, n=3: 5"
+
+    def test_value_enumeration_multi_var_csv(self):
+        from utils.cli import format_match
+        result = format_match({"m": 2, "n": 3, "__value__": 5}, "csv")
+        assert result == "2,3,5"

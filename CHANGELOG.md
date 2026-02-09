@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-02-09
+
+### Added
+- **`solve` directive** for calculator and enumeration modes (Issue #36, #51)
+  - Calculator mode: `--expr "solve tri(36)"` → `666` (no free vars, no comparison)
+  - Verify mode: `--expr "solve primesum(7,2) == 666"` → `true` (no free vars, with comparison)
+  - Value enumeration: `--expr "solve tri(n)" --max-n 10` → tabulates values (free vars, no comparison)
+  - With comparison + free vars: acts like `does_exist` (finds first match)
+- **Sequence enumeration** via bare-term expressions
+  - `for_any` with bare terms: `--expr "for_any tri(n)" --max-n 10` enumerates values
+  - Multi-variable: `--expr "for_any tri(n) + tri(m)"` enumerates all combinations
+  - Output: `n=7: 666` (text), `{"variables": {"n": 7}, "value": 666}` (json), `7,666` (csv)
+- **Implicit `solve` auto-detection** — bare term with no directive and no free vars becomes calculator
+  - `--expr "tri(36)"` → `666` (previously required `verify`)
+- **`_is_comparison()` recursive helper** — traverses BinaryOp, UnaryOp, ContextBlock to detect comparison nodes
+- **Graceful CTRL+C** for long enumerations — partial results preserved, summary to stderr
+- `_json_safe()` helper for complex number JSON serialization
+- 32 new tests (13 enumeration + 11 solve + 8 format) — 812 total, zero regressions
+
+### Changed
+- `find_matches()` rewritten with 7 code paths based on directive × comparison × free-variables matrix
+- `format_match()` handles `__solve_result__` and `__value__` output modes
+- Implicit mode detection: no directive + no comparison + no free vars → `solve` (was `verify`)
+- `does_exist` with bare terms (no comparison) now gives a helpful error with hint
+
+### Known Limitations
+- **Implicit default bounds**: Multi-variable enumeration uses `--max-n=1000000` and `--max-m=10000` by default. The 100x asymmetry reflects the primary use case (primesum(n,2) needs large n ranges; m is for cross-sequence matching). These bounds are not surfaced in non-verbose output — a "Not found" result means "not found within bounds", not "does not exist." Use `--verbose` to see search ranges, or set explicit bounds. See #58 for planned improvements.
+- **Cartesian product iteration**: Multi-variable expressions iterate via `itertools.product` with alphabetical variable ordering. For two variables this can produce very large search spaces (e.g., 10B combinations for n×m). Diagonal/interleaved strategies are planned (#42).
+
+### Related Issues
+- Issue #36: Sequence enumeration
+- Issue #51: Solve directive
+- Issue #55: v0.8.x roadmap
+
+### Design Documents
+- `2026-02-09__01-14-36__dev-workflow_issue36-implementation-plan.md`
+- `2026-02-08__11-01-03__issue36-sequence-enumeration-and-solve-quantifier-analysis.md`
+
 ## [0.7.21] - 2026-02-08
 
 ### Added

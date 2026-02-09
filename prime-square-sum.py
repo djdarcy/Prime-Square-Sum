@@ -348,8 +348,13 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
 
             if args.verbose and match_count % 100 == 0:
                 elapsed = time.time() - start_time
-                print(f"  ... {match_count} matches found ({elapsed:.1f}s)", file=sys.stderr)
+                print(f"  ... {match_count} results ({elapsed:.1f}s)", file=sys.stderr)
 
+    except KeyboardInterrupt:
+        # Graceful interruption — results already printed to stdout are preserved
+        elapsed = time.time() - start_time
+        print(f"\nInterrupted after {match_count} results ({elapsed:.1f}s)", file=sys.stderr)
+        return 0 if found_any else 1
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1

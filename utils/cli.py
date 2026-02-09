@@ -1140,13 +1140,23 @@ from typing import Callable
 # Output Formatting
 # =============================================================================
 
+def _json_safe(value):
+    """Convert a value to a JSON-serializable form (handles complex numbers)."""
+    if isinstance(value, complex):
+        return {"real": value.real, "imag": value.imag}
+    return value
+
+
 def format_match(match: Dict[str, Any], format_type: str = "text") -> str:
     """
     Format a match result for output.
 
     Args:
-        match: Dictionary mapping variable names to values, or
-               {"__verify_result__": bool} for verify mode
+        match: Dictionary mapping variable names to values.
+            Special keys:
+            - "__verify_result__": bool — verify/truth-check mode
+            - "__solve_result__": value — calculator mode
+            - "__value__": value — value enumeration mode (alongside variable keys)
         format_type: One of "text", "json", "csv"
 
     Returns:
@@ -1162,7 +1172,30 @@ def format_match(match: Dict[str, Any], format_type: str = "text") -> str:
         else:  # text
             return "true" if result else "false"
 
-    # Standard match result
+    # Handle solve/calculator mode result
+    if "__solve_result__" in match:
+        value = match["__solve_result__"]
+        if format_type == "json":
+            return json.dumps({"result": _json_safe(value)})
+        else:  # text or csv
+            return str(value)
+
+    # Handle value enumeration mode
+    if "__value__" in match:
+        value = match["__value__"]
+        var_items = sorted((k, v) for k, v in match.items() if not k.startswith("__"))
+        if format_type == "json":
+            return json.dumps({
+                "variables": {k: v for k, v in var_items},
+                "value": _json_safe(value)
+            })
+        elif format_type == "csv":
+            return ",".join(str(v) for _, v in var_items) + "," + str(value)
+        else:  # text
+            vars_str = ", ".join(f"{k}={v}" for k, v in var_items)
+            return f"{vars_str}: {value}"
+
+    # Standard match result (comparison-based search)
     if format_type == "json":
         return json.dumps({"found": True, "variables": match})
     elif format_type == "csv":

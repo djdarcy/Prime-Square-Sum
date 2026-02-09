@@ -20,19 +20,20 @@ python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 
 
 ## Expression Syntax
 
-An expression consists of an optional **quantifier** and a **comparison**:
+An expression consists of an optional **directive** and a **comparison**:
 
 ```
-[quantifier] left_side operator right_side
+[directive] left_side operator right_side
 ```
 
-### Quantifiers
+### Directives/Quantifiers
 
-| Quantifier | Free Variables | Behavior | Use Case |
+| Directive | Free Variables | Behavior | Use Case |
 |------------|----------------|----------|----------|
 | `does_exist` | Required | Find first match, stop | "Is there an n where...?" |
 | `for_any` | Required | Find all matches | "What are all n,m where...?" |
 | `verify` | None allowed | Evaluate directly | "Is this equation true?" |
+| `solve` | Optional | Compute or enumerate values | "What is...?" / "What values does...?" |
 
 **Examples:**
 ```bash
@@ -44,23 +45,102 @@ An expression consists of an optional **quantifier** and a **comparison**:
 
 # verify - check if a closed formula is true
 --expr "verify primesum(7,2) == 666"
+
+# solve - calculator mode (no free variables, no comparison)
+--expr "solve tri(36)"
+# Output: 666
+
+# solve - value enumeration (free variables, no comparison)
+--expr "solve tri(n)" --max-n 10
+# Output: n=1: 1, n=2: 3, n=3: 6, ...
 ```
 
-### Implicit Verify Mode
+### Implicit Mode Detection
 
-When you omit the quantifier and the expression has no free variables, `verify` mode is auto-detected:
+When you omit the directive, the system auto-detects the mode:
+
+| Expression | Free Variables | Comparison | Detected Mode |
+|------------|---------------|------------|---------------|
+| `primesum(7,2) == 666` | No | Yes | `verify` |
+| `tri(36)` | No | No | `solve` (calculator) |
+| `tri(n) == 666` | Yes | Yes | Error (needs directive) |
+| `tri(n)` | Yes | No | Error (needs directive) |
 
 ```bash
-# These are equivalent:
---expr "verify primesum(7,2) == 666"
+# Implicit verify — no directive, no free variables, has comparison
 --expr "primesum(7,2) == 666"
+
+# Implicit solve — no directive, no free variables, no comparison
+--expr "tri(36)"
+# Output: 666
 ```
 
-If you omit the quantifier but have free variables, you'll get a helpful error:
+If you omit the directive but have free variables, you'll get a helpful error:
 ```
 Error: Expression has free variables (n) but no quantifier.
 Use 'does_exist' or 'for_any' prefix, e.g.: does_exist primesum(n,2) == 666
 ```
+
+### Solve Directive (v0.8.0+)
+
+The `solve` directive has three modes depending on the expression:
+
+**Calculator mode** — no free variables, no comparison (just evaluate):
+```bash
+--expr "solve tri(36)"                    # 666
+--expr "solve 2**10 + 1"                  # 1025
+--expr "solve primesum(7,2)"              # 666
+```
+
+**Verify mode** — no free variables, with comparison (check truth):
+```bash
+--expr "solve primesum(7,2) == 666"       # true
+```
+
+**Value enumeration** — free variables, no comparison (tabulate values):
+```bash
+--expr "solve tri(n)" --max-n 10
+# n=1: 1
+# n=2: 3
+# n=3: 6
+# ...
+
+--expr "solve primesum(n,2)" --max-n 7
+# n=1: 4
+# n=2: 13
+# ...
+# n=7: 666
+```
+
+With free variables and a comparison, `solve` acts like `does_exist` (finds first match).
+
+### Sequence Enumeration (v0.8.0+)
+
+Bare-term expressions (no comparison operator) with `for_any` or `solve` enumerate sequence values:
+
+```bash
+# Enumerate triangular numbers
+--expr "for_any tri(n)" --max-n 10
+# n=1: 1
+# n=2: 3
+# ...
+
+# Multi-variable enumeration
+--expr "for_any tri(n) + tri(m)" --max-n 5 --max-m 5
+# n=1, m=1: 2
+# n=1, m=2: 4
+# ...
+
+# Use CTRL+C to interrupt long enumerations — results already printed are preserved
+```
+
+Output formats for enumerated values:
+
+| Format | Example Output |
+|--------|---------------|
+| text | `n=7: 666` |
+| json | `{"variables": {"n": 7}, "value": 666}` |
+| csv | `7,666` |
 
 ### Operator Precedence (v0.7.14+)
 
