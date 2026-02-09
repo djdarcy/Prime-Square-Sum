@@ -581,6 +581,103 @@ theorem stf'_telescope_6 :
     6 * stf' 6 +
     (Finset.range 3).sum (fun z => 6 - tri z + z) := by native_decide
 
+-- === Step 4A: Boundary sum closed form ===
+
+/-- Helper: 6 * tri(n) = 3 * n * (n + 1).
+    Follows directly from two_mul_tri by multiplying both sides by 3. -/
+theorem six_mul_tri (n : Nat) : 6 * tri n = 3 * n * (n + 1) := by
+  have h := two_mul_tri n
+  have h2 : 6 * tri n = 3 * (2 * tri n) := by ring
+  rw [h2, h]; ring
+
+/-- Tetrahedral number identity: 6 * Σ_{z<r} tri(z) = (r-1)*r*(r+1).
+    Proved by induction on r with cases to eliminate Nat subtraction. -/
+theorem six_mul_sum_tri (r : Nat) :
+    6 * (Finset.range r).sum (fun z => tri z) = (r - 1) * r * (r + 1) := by
+  induction r with
+  | zero => simp
+  | succ n ih =>
+    rw [Finset.sum_range_succ, Nat.mul_add, ih, six_mul_tri]
+    -- Goal: (n-1)*n*(n+1) + 3*n*(n+1) = n*(n+1)*(n+2)
+    cases n with
+    | zero => simp
+    | succ m =>
+      -- After cases: succ m - 1 is kernel-defeq to m, (m+2)-1 to m+1
+      show m * (m + 1) * (m + 2) + 3 * (m + 1) * (m + 2) =
+        (m + 1) * (m + 2) * (m + 3)
+      ring
+
+/-- The induction step for the boundary sum: adding one more row term.
+    Uses six_mul_tri to connect tri(n) with n*(n+1), allowing omega to close
+    the resulting linear identity over opaque nonlinear atoms. -/
+private theorem boundary_step (b n : Nat) (htn : tri n ≤ b) :
+    6 * (b - tri n + n) + 3 * n * (n - 1) = 6 * b := by
+  cases n with
+  | zero => simp [tri_zero]
+  | succ m =>
+    -- Normalize (m+1)-1 to m via kernel-defeq, so omega sees matching atoms
+    show 6 * (b - tri (m + 1) + (m + 1)) + 3 * (m + 1) * m = 6 * b
+    -- 6*(m+1) + 3*(m+1)*m = 6*tri(m+1) by six_mul_tri + ring,
+    -- then omega treats tri(m+1) and 3*(m+1)*m as opaque atoms
+    have h1 : 6 * (m + 1) + 3 * (m + 1) * m = 6 * tri (m + 1) := by
+      rw [six_mul_tri]; ring
+    omega
+
+/-- Boundary sum closed form (Nat-safe additive identity).
+    6 * Σ_{z<r} (b - tri(z) + z) + r*(r-1)*(r-2) = 6*r*b
+
+    This gives a closed form for the boundary sum B from the telescoping theorem.
+    The additive formulation avoids both Nat subtraction underflow and division by 6.
+
+    Proof strategy: induction on r, decomposing the cubic difference
+    (n+1)*n*(n-1) = n*(n-1)*(n-2) + 3*n*(n-1) then combining hih (IH) and
+    boundary_step via omega over opaque nonlinear atoms. -/
+theorem boundary_sum_closed (b r : Nat)
+    (hvalid : ∀ z, z < r → tri z ≤ b) :
+    6 * (Finset.range r).sum (fun z => b - tri z + z) + r * (r - 1) * (r - 2) =
+    6 * r * b := by
+  induction r with
+  | zero => simp
+  | succ n ih =>
+    rw [Finset.sum_range_succ, mul_add]
+    have htn : tri n ≤ b := hvalid n (by omega)
+    have hih := ih (fun z hz => hvalid z (by omega))
+    have hstep := boundary_step b n htn
+    -- Cubic difference: (n+1)*n*(n-1) = n*(n-1)*(n-2) + 3*n*(n-1)
+    have hcubic : (n + 1) * n * (n - 1) =
+        n * (n - 1) * (n - 2) + 3 * n * (n - 1) := by
+      cases n with
+      | zero => simp
+      | succ m =>
+        cases m with
+        | zero => simp
+        | succ k =>
+          show (k + 3) * (k + 2) * (k + 1) =
+            (k + 2) * (k + 1) * k + 3 * (k + 2) * (k + 1)
+          ring
+    -- Normalize Nat subtractions in goal via kernel-defeq:
+    -- (n+1)-1 ≡ n and (n+1)-2 ≡ n-1 at the kernel level
+    show 6 * (Finset.range n).sum (fun z => b - tri z + z) +
+      6 * (b - tri n + n) + (n + 1) * n * (n - 1) = 6 * (n + 1) * b
+    -- Expand RHS so omega sees 6*n*b (matching hih) and 6*b (matching hstep)
+    have hrhs : 6 * (n + 1) * b = 6 * n * b + 6 * b := by ring
+    rw [hcubic, hrhs]
+    -- omega closes via linear combination of opaque atoms:
+    -- hih: 6*Σ + n*(n-1)*(n-2) = 6*n*b
+    -- hstep: 6*(b-tri n+n) + 3*n*(n-1) = 6*b
+    -- Goal: 6*Σ + 6*(b-tri n+n) + n*(n-1)*(n-2) + 3*n*(n-1) = 6*n*b + 6*b
+    omega
+
+-- Bounded verification of boundary sum closed form
+theorem boundary_sum_closed_10 :
+    6 * (Finset.range 4).sum (fun z => 10 - tri z + z) + 4 * 3 * 2 = 6 * 4 * 10 := by native_decide
+
+theorem boundary_sum_closed_6 :
+    6 * (Finset.range 3).sum (fun z => 6 - tri z + z) + 3 * 2 * 1 = 6 * 3 * 6 := by native_decide
+
+theorem boundary_sum_closed_15 :
+    6 * (Finset.range 5).sum (fun z => 15 - tri z + z) + 5 * 4 * 3 = 6 * 5 * 15 := by native_decide
+
 -- ============================================================
 -- PART 5: Bounded Recast Pattern
 -- ============================================================

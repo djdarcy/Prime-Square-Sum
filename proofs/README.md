@@ -50,6 +50,12 @@ Triangular number theory and the stf (trisum) function.
 - `rowValue'_sum_index_shift` — Index shift: Σ_{z<r} rv'(b,z) + rv'(b,r) = stf'(b), bridging 0-indexed sum with 1-indexed stf' via `sum_range_succ` + `sum_range_succ'`
 - `stf'_telescope` — **Main telescoping theorem**: stf'(b) + C + b·rv'(b,r) = b·stf'(b) + B, where C = Σ(z+1)·G(z+1) (correction), B = Σ(b-tri(z)+z) (boundary), r = qg(b). Additive form avoids all Nat subtraction underflow. Reduces stf to three simpler quantities.
 
+*Step 4A — Boundary sum closed form:*
+- `six_mul_tri` — Helper: 6 * tri(n) = 3 * n * (n + 1)
+- `six_mul_sum_tri` — Tetrahedral identity: 6 * Σ_{z<r} tri(z) = (r-1)*r*(r+1)
+- `boundary_step` (private) — Induction step: 6*(b - tri(n) + n) + 3*n*(n-1) = 6*b
+- `boundary_sum_closed` — **Boundary sum B closed form**: 6 * Σ_{z<r}(b - tri(z) + z) + r*(r-1)*(r-2) = 6*r*b. Nat-safe additive identity giving a closed form for the boundary sum B from the telescoping theorem. Uses cubic decomposition via `ring` and omega over opaque nonlinear atoms.
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
 - `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, recursive relation, index shift, and telescoping across bases 6, 10, 15
@@ -69,6 +75,9 @@ rowValue → rowValue_eq_rowValue' → rowValue'
     → sum_rowValue'_succ_eq (summed relation)
         → rowValue'_sum_index_shift (index shift)
         → stf'_telescope (telescoping identity)
+
+two_mul_tri → six_mul_tri → six_mul_sum_tri (tetrahedral)
+six_mul_tri → boundary_step → boundary_sum_closed (boundary sum B)
 ```
 
 **All theorems fully machine-verified** (zero `sorry`).

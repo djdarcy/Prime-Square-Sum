@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.21] - 2026-02-08
+
+### Added
+- **Step 4A: Boundary sum closed form** in TriSum.lean
+  - `six_mul_tri` — Helper: 6 * tri(n) = 3 * n * (n + 1), factors through `two_mul_tri`
+  - `six_mul_sum_tri` — Tetrahedral number identity: 6 * Σ_{z<r} tri(z) = (r-1)*r*(r+1), proved by induction with `show` + `ring` to normalize Nat subtraction
+  - `boundary_step` (private) — Induction step: 6*(b - tri(n) + n) + 3*n*(n-1) = 6*b, uses `six_mul_tri` + `omega` with `show` normalization
+  - `boundary_sum_closed` — **Main result**: 6*B + r*(r-1)*(r-2) = 6*r*b where B = Σ_{z<r} (b - tri(z) + z). Nat-safe additive form avoids division and subtraction underflow. Proved by induction with cubic decomposition (`ring`) and RHS expansion (`ring`), closed by `omega` over opaque nonlinear atoms.
+  - Bounded `native_decide` verifications for b = 6, 10, 15
+- Python verification script `tests/one-offs/thinking/2026-02-08__boundary-sum-B-closed-form-verify.py`
+
+### Design Documents
+- `2026-02-08__14-12-48__dev-workflow_boundary-sum-B-closed-form-and-Fb-analysis.md` — Analysis of boundary sum proof strategies and F(b) closed-form structure
+
 ## [0.7.20] - 2026-02-08
 
 ### Added
