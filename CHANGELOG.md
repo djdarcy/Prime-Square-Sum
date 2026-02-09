@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [0.7.21] - 2026-02-08/09
 
 ### Added
+- **Step 4C: Correction sum C closed form** in TriSum.lean
+  - `geom_sum_pred_mul_add_one` — Helper: (b-1) * Σ_{i<n} b^i + 1 = b^n. Nat-safe additive form of the standard (b-1)·G(n) = b^n - 1. Proved by `cases b` + induction with `add_right_comm` + `pow_succ` + `ring`. Requires `hb : 1 ≤ b`.
+  - `correction_sum_intermediate` — **(b-1)·C + tri(r) = Σ_{j<r+1} j·b^j**. Connects the correction sum C to the arithmetic-geometric sum via induction on r. Key techniques: explicit `have` bindings for ambiguous `sum_range_succ`, `mul_left_comm` for coefficient extraction, `ring` for factoring with opaque Finset.sum variables.
+  - `correction_sum_closed` — **Main result**: (b-1)² · ((b-1)·C + tri(r)) + (r+1)·b^(r+1) = r·b^(r+2) + b. Two-line proof combining `correction_sum_intermediate` with `arith_geom_sum`. Nat-safe additive identity for the correction sum from the telescoping theorem.
+  - Bounded `native_decide` verifications for (b=10,r=4) and (b=6,r=3) for both intermediate and closed forms
 - **Step 4B: Arithmetic-geometric sum identity** in TriSum.lean
   - `arith_geom_sum` — **Main result**: (b-1)² * Σ_{i<n} i·bⁱ + n·bⁿ = (n-1)·b^(n+1) + b. The mathematical bottleneck for the stf closed form — once proved, steps 4C (correction sum C), 4D (last row rv'), and 4F (full stf = F(b)) follow. Proved by `cases b` (to handle Nat (b-1)²=0 when b=0), then induction on n with `ring`-provable step lemma + `simp only [Nat.succ_sub_one]` normalization + `omega`. No hypothesis on b required — identity holds for all b in Nat when n ≥ 1.
   - Bounded `native_decide` verifications for (b=2,n=3), (b=10,n=4), (b=6,n=5)
@@ -20,11 +25,14 @@ All notable changes to this project will be documented in this file.
   - `tests/one-offs/thinking/2026-02-09__arith-geom-sum-exploration.py` — Step 4B identity exploration (both standard and Nat-safe forms)
   - `tests/one-offs/thinking/2026-02-09__step4b-step-lemma-derivation.py` — Step lemma derivation and Nat edge case analysis
   - `tests/one-offs/thinking/2026-02-09__step4b-induction-proof-mechanics.py` — Full proof chain verification with omega atom analysis
+  - `tests/one-offs/thinking/2026-02-09__step4c-correction-sum-closed-form.py` — Step 4C identity verification (10 categories, 7 bases)
 
 ### Design Documents
 - `2026-02-08__14-12-48__dev-workflow_boundary-sum-B-closed-form-and-Fb-analysis.md` — Analysis of boundary sum proof strategies and F(b) closed-form structure
 - `2026-02-09__01-29-59__dev-workflow_step4b-arith-geom-sum.md` — Step 4B implementation planning with Nat (b-1)² pitfall analysis
 - `2026-02-09__00-45-08__full-postmortem_step4a-boundary-sum-and-4b-roadmap.md` — Step 4A postmortem and Step 4B roadmap
+- `2026-02-09__02-43-09__dev-workflow_step4c-correction-sum-closed-form.md` — Step 4C implementation planning and algebraic decomposition chain
+- `2026-02-09__10-03-19__full-postmortem_step4c-correction-sum-closed-form.md` — Step 4C postmortem
 
 ## [0.7.20] - 2026-02-08
 

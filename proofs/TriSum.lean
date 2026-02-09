@@ -731,6 +731,101 @@ theorem arith_geom_sum_b6_n5 :
     (5 - 1) * 6 ^ (5 + 1) + 6 := by native_decide
 
 -- ============================================================
+-- Step 4C: Correction Sum C Closed Form
+-- ============================================================
+
+/-- Geometric sum with (b-1) factor: (b-1) * Σ_{i<n} b^i + 1 = b^n.
+    Nat-safe additive form of the standard (b-1)·G(n) = b^n - 1.
+    Requires b ≥ 1 (fails for b=0, n≥1 since LHS=1 but 0^n=0). -/
+theorem geom_sum_pred_mul_add_one (b n : Nat) (hb : 1 ≤ b) :
+    (b - 1) * (Finset.range n).sum (fun i => b ^ i) + 1 = b ^ n := by
+  cases b with
+  | zero => omega
+  | succ c =>
+    simp only [Nat.succ_sub_one]
+    -- Goal: c * Σ_{i<n} (c+1)^i + 1 = (c+1)^n
+    induction n with
+    | zero => simp
+    | succ n ih =>
+      rw [Finset.sum_range_succ, Nat.mul_add, add_right_comm, ih, pow_succ]
+      ring
+
+-- Bounded verification of geometric (b-1) identity
+theorem geom_sum_pred_mul_10_3 :
+    9 * (1 + 10 + 100) + 1 = 1000 := by norm_num
+
+/-- Intermediate identity: (b-1)·C + tri(r) = Σ_{j<r+1} j·b^j.
+    Connects the correction sum C to the arithmetic-geometric sum.
+    C = Σ_{z<r} (z+1)·G(z+1) where G(n) = Σ_{i<n} b^i.
+    Proof by induction on r using geom_sum_pred_mul_add_one. -/
+theorem correction_sum_intermediate (b r : Nat) (hb : 1 ≤ b) :
+    (b - 1) * (Finset.range r).sum (fun z =>
+      (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) +
+    tri r =
+    (Finset.range (r + 1)).sum (fun j => j * b ^ j) := by
+  induction r with
+  | zero => simp [tri]
+  | succ n ih =>
+    -- Peel last terms from both sums explicitly
+    have hC := Finset.sum_range_succ
+      (fun z => (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) n
+    have hRHS := Finset.sum_range_succ (fun j => j * b ^ j) (n + 1)
+    rw [hC, Nat.mul_add, tri_succ, hRHS]
+    -- Goal: (b-1)*C(n) + (b-1)*((n+1)*G(n+1)) + (tri(n) + (n+1))
+    --     = Σ_{j<n+1} j*b^j + (n+1)*b^(n+1)
+    -- Commute (b-1)*((n+1)*G) to (n+1)*((b-1)*G) for geom_sum helper
+    rw [mul_left_comm (b - 1) (n + 1)]
+    -- Prepare step: (n+1)*((b-1)*G(n+1) + 1) = (n+1)*b^(n+1)
+    have hstep : (n + 1) * ((b - 1) * (Finset.range (n + 1)).sum (fun i => b ^ i)) + (n + 1) =
+        (n + 1) * b ^ (n + 1) := by
+      have h := geom_sum_pred_mul_add_one b (n + 1) hb
+      have : (n + 1) * ((b - 1) * (Finset.range (n + 1)).sum (fun i => b ^ i)) + (n + 1) =
+          (n + 1) * ((b - 1) * (Finset.range (n + 1)).sum (fun i => b ^ i) + 1) := by ring
+      rw [this, h]
+    -- omega combines ih and hstep to close the goal
+    omega
+
+-- Bounded verification of intermediate identity
+theorem correction_sum_intermediate_10_4 :
+    9 * (Finset.range 4).sum (fun z =>
+      (z + 1) * (Finset.range (z + 1)).sum (fun i => 10 ^ i)) +
+    tri 4 =
+    (Finset.range 5).sum (fun j => j * 10 ^ j) := by native_decide
+
+theorem correction_sum_intermediate_6_3 :
+    5 * (Finset.range 3).sum (fun z =>
+      (z + 1) * (Finset.range (z + 1)).sum (fun i => 6 ^ i)) +
+    tri 3 =
+    (Finset.range 4).sum (fun j => j * 6 ^ j) := by native_decide
+
+/-- Correction sum C closed form (Nat-safe additive identity):
+    (b-1)² · ((b-1)·C + tri(r)) + (r+1)·b^(r+1) = r·b^(r+2) + b.
+    Combines correction_sum_intermediate with arith_geom_sum. -/
+theorem correction_sum_closed (b r : Nat) (hb : 1 ≤ b) :
+    (b - 1) ^ 2 *
+    ((b - 1) * (Finset.range r).sum (fun z =>
+      (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) +
+    tri r) + (r + 1) * b ^ (r + 1) =
+    r * b ^ (r + 2) + b := by
+  rw [correction_sum_intermediate b r hb]
+  exact arith_geom_sum b (r + 1) (by omega)
+
+-- Bounded verification of correction sum closed form
+theorem correction_sum_closed_10_4 :
+    (10 - 1) ^ 2 *
+    (9 * (Finset.range 4).sum (fun z =>
+      (z + 1) * (Finset.range (z + 1)).sum (fun i => 10 ^ i)) +
+    tri 4) + 5 * 10 ^ 5 =
+    4 * 10 ^ 6 + 10 := by native_decide
+
+theorem correction_sum_closed_6_3 :
+    (6 - 1) ^ 2 *
+    (5 * (Finset.range 3).sum (fun z =>
+      (z + 1) * (Finset.range (z + 1)).sum (fun i => 6 ^ i)) +
+    tri 3) + 4 * 6 ^ 4 =
+    3 * 6 ^ 5 + 6 := by native_decide
+
+-- ============================================================
 -- PART 5: Bounded Recast Pattern
 -- ============================================================
 

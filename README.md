@@ -6,7 +6,7 @@
 
 📓 **[View the Mathematica Notebook](https://github.com/djdarcy/Prime-Square-Sum/blob/main/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)** *(Requires [Mathematica](https://www.wolfram.com/mathematica/) or [Wolfram Player](https://www.wolfram.com/player/))*
 
-The python program is a computational platform for validating mathematical relationships. It checks LHS expressions against RHS targets and stores sequences for future analysis. The main focus of `prime-square-sum` is on summing triangular row values together to determine if:
+The python program is a computational platform for validating mathematical relationships. It checks LHS expressions against RHS targets and stores sequences for future analysis. The main focus of `prime-square-sum` is on summing triangular row values together (where `stf()` is an acronym for sum triangular factors) to determine if:
 
 ![stf(b) = sum_(z=1)^qg(b) tf(b,z);](<paper and notes/function-stf-defined.png> "stf defined")
 
@@ -18,7 +18,7 @@ r = qg(b) = size of the base row of the triangular number; //qg(b) = 1/2(-1+sqrt
 z = row in the triangular number;  //ex. tf(10,4)=0123; tf(10,3)=456; tf(10,2)=78, etc.)
 ```
 
-Where `tf()` is defined to be:
+Where `tf()`, the individual triangular row factors, are defined to be:
 
 ![tf(b,z) = (-2 + 2b - 2b^2 + z - bz - z^2 + bz^2 + b^z(2 + 2b^2 + z + z^2 - b(2 + z + z^2))) / (2(-1 + b)^2)](<paper and notes/function-tf-defined.png> "tf defined")
 
@@ -34,7 +34,7 @@ This program attempts to provide an answer. The base-10 number from `stf(666)` u
 
 `37005443752611483714216385166550857181329086284892731078593232926279977894581784762614450464857290`
 
-While `stf(b)` is a closed-form function, `primesum(n,p)` is computationally irreducible. This means there is no readily available formula to directly find which `n` satisfies `primesum(n,p) = stf(b)`. So, in the absence of a better method, we enumerate prime sums and check for matches. See [docs/rationale.md](docs/rationale.md) for additional details as to why this tool needs to be as flexible and versatile as it is.
+While `stf(b)` is a closed-form function, `primesum(n,p)` is computationally irreducible. This means there is no readily available formula to directly find which `n` satisfies `primesum(n,p) = stf(b)`. So, in the absence of a better method, we enumerate prime sums and check for matches. See [docs/rationale.md](docs/rationale.md) for additional details as to why this tool needs to be as flexible as it is.
 
 Due to the huge size of the 98-digits I've further adapted `prime-square-sum` to work with multiprocessing and CUDA (via CuPy) to speed up the computations. See the Mathematica notebook in [`paper and notes/`](https://github.com/djdarcy/Prime-Square-Sum/tree/main/paper%20and%20notes) for more details.
 

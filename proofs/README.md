@@ -59,6 +59,11 @@ Triangular number theory and the stf (trisum) function.
 *Step 4B — Arithmetic-geometric sum identity:*
 - `arith_geom_sum` — **Arithmetic-geometric sum closed form**: (b-1)² · Σ_{i<n} i·bⁱ + n·bⁿ = (n-1)·b^(n+1) + b. The mathematical bottleneck for the stf closed form — steps 4C, 4D, and 4F all depend on this identity. Proved by `cases b` (Nat (b-1)²=0 pitfall when b=0), then induction on n with `ring`-provable step lemma, `simp only [Nat.succ_sub_one]` normalization, and `omega` linear combination. No hypothesis on b needed.
 
+*Step 4C — Correction sum C closed form:*
+- `geom_sum_pred_mul_add_one` — Geometric sum with (b-1) factor: (b-1) * Σ_{i<n} b^i + 1 = b^n. Nat-safe additive form of (b-1)·G(n) = b^n - 1. Proved by `cases b` + induction with `add_right_comm` + `pow_succ` + `ring`. Requires `hb : 1 ≤ b`.
+- `correction_sum_intermediate` — Intermediate identity: (b-1)·C + tri(r) = Σ_{j<r+1} j·b^j. Connects the correction sum C = Σ_{z<r}(z+1)·G(z+1) to the arithmetic-geometric sum. Proved by induction on r using explicit `have` bindings for `sum_range_succ` disambiguation, `mul_left_comm` for coefficient extraction, and `ring` for factoring with opaque Finset.sum variables.
+- `correction_sum_closed` — **Correction sum C closed form**: (b-1)² · ((b-1)·C + tri(r)) + (r+1)·b^(r+1) = r·b^(r+2) + b. Nat-safe additive identity combining `correction_sum_intermediate` with `arith_geom_sum`. Two-line proof via rewrite + exact.
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
 - `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, recursive relation, index shift, and telescoping across bases 6, 10, 15
@@ -83,8 +88,9 @@ two_mul_tri → six_mul_tri → six_mul_sum_tri (tetrahedral)
 six_mul_tri → boundary_step → boundary_sum_closed (boundary sum B)
 
 arith_geom_sum (arithmetic-geometric sum, Step 4B bottleneck)
-    → [future] correction sum C closed form (Step 4C)
-    → [future] last row rv' closed form (Step 4D)
+    → correction_sum_intermediate (Step 4C, via geom_sum_pred_mul_add_one)
+        → correction_sum_closed (Step 4C, combines with arith_geom_sum)
+    → [future] last row rv' closed form (Step 4D, also uses arith_geom_sum)
     → [future] full stf = F(b) (Step 4F, combines 4A + 4B + 4C + 4D)
 ```
 
