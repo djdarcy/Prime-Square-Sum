@@ -2,19 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.7.21] - 2026-02-08
+## [0.7.21] - 2026-02-08/09
 
 ### Added
+- **Step 4B: Arithmetic-geometric sum identity** in TriSum.lean
+  - `arith_geom_sum` — **Main result**: (b-1)² * Σ_{i<n} i·bⁱ + n·bⁿ = (n-1)·b^(n+1) + b. The mathematical bottleneck for the stf closed form — once proved, steps 4C (correction sum C), 4D (last row rv'), and 4F (full stf = F(b)) follow. Proved by `cases b` (to handle Nat (b-1)²=0 when b=0), then induction on n with `ring`-provable step lemma + `simp only [Nat.succ_sub_one]` normalization + `omega`. No hypothesis on b required — identity holds for all b in Nat when n ≥ 1.
+  - Bounded `native_decide` verifications for (b=2,n=3), (b=10,n=4), (b=6,n=5)
 - **Step 4A: Boundary sum closed form** in TriSum.lean
   - `six_mul_tri` — Helper: 6 * tri(n) = 3 * n * (n + 1), factors through `two_mul_tri`
   - `six_mul_sum_tri` — Tetrahedral number identity: 6 * Σ_{z<r} tri(z) = (r-1)*r*(r+1), proved by induction with `show` + `ring` to normalize Nat subtraction
   - `boundary_step` (private) — Induction step: 6*(b - tri(n) + n) + 3*n*(n-1) = 6*b, uses `six_mul_tri` + `omega` with `show` normalization
   - `boundary_sum_closed` — **Main result**: 6*B + r*(r-1)*(r-2) = 6*r*b where B = Σ_{z<r} (b - tri(z) + z). Nat-safe additive form avoids division and subtraction underflow. Proved by induction with cubic decomposition (`ring`) and RHS expansion (`ring`), closed by `omega` over opaque nonlinear atoms.
   - Bounded `native_decide` verifications for b = 6, 10, 15
-- Python verification script `tests/one-offs/thinking/2026-02-08__boundary-sum-B-closed-form-verify.py`
+- Python verification scripts:
+  - `tests/one-offs/thinking/2026-02-08__boundary-sum-B-closed-form-verify.py` — Step 4A numerical verification
+  - `tests/one-offs/thinking/2026-02-08__phase3c-algebraic-properties-verify.py` — Phase 3C theorem verification (6 theorems, 87+ test cases)
+  - `tests/one-offs/thinking/2026-02-09__arith-geom-sum-exploration.py` — Step 4B identity exploration (both standard and Nat-safe forms)
+  - `tests/one-offs/thinking/2026-02-09__step4b-step-lemma-derivation.py` — Step lemma derivation and Nat edge case analysis
+  - `tests/one-offs/thinking/2026-02-09__step4b-induction-proof-mechanics.py` — Full proof chain verification with omega atom analysis
 
 ### Design Documents
 - `2026-02-08__14-12-48__dev-workflow_boundary-sum-B-closed-form-and-Fb-analysis.md` — Analysis of boundary sum proof strategies and F(b) closed-form structure
+- `2026-02-09__01-29-59__dev-workflow_step4b-arith-geom-sum.md` — Step 4B implementation planning with Nat (b-1)² pitfall analysis
+- `2026-02-09__00-45-08__full-postmortem_step4a-boundary-sum-and-4b-roadmap.md` — Step 4A postmortem and Step 4B roadmap
 
 ## [0.7.20] - 2026-02-08
 

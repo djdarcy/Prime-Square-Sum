@@ -56,6 +56,9 @@ Triangular number theory and the stf (trisum) function.
 - `boundary_step` (private) — Induction step: 6*(b - tri(n) + n) + 3*n*(n-1) = 6*b
 - `boundary_sum_closed` — **Boundary sum B closed form**: 6 * Σ_{z<r}(b - tri(z) + z) + r*(r-1)*(r-2) = 6*r*b. Nat-safe additive identity giving a closed form for the boundary sum B from the telescoping theorem. Uses cubic decomposition via `ring` and omega over opaque nonlinear atoms.
 
+*Step 4B — Arithmetic-geometric sum identity:*
+- `arith_geom_sum` — **Arithmetic-geometric sum closed form**: (b-1)² · Σ_{i<n} i·bⁱ + n·bⁿ = (n-1)·b^(n+1) + b. The mathematical bottleneck for the stf closed form — steps 4C, 4D, and 4F all depend on this identity. Proved by `cases b` (Nat (b-1)²=0 pitfall when b=0), then induction on n with `ring`-provable step lemma, `simp only [Nat.succ_sub_one]` normalization, and `omega` linear combination. No hypothesis on b needed.
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
 - `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, recursive relation, index shift, and telescoping across bases 6, 10, 15
@@ -78,6 +81,11 @@ rowValue → rowValue_eq_rowValue' → rowValue'
 
 two_mul_tri → six_mul_tri → six_mul_sum_tri (tetrahedral)
 six_mul_tri → boundary_step → boundary_sum_closed (boundary sum B)
+
+arith_geom_sum (arithmetic-geometric sum, Step 4B bottleneck)
+    → [future] correction sum C closed form (Step 4C)
+    → [future] last row rv' closed form (Step 4D)
+    → [future] full stf = F(b) (Step 4F, combines 4A + 4B + 4C + 4D)
 ```
 
 **All theorems fully machine-verified** (zero `sorry`).

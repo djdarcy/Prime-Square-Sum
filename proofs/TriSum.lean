@@ -679,6 +679,58 @@ theorem boundary_sum_closed_15 :
     6 * (Finset.range 5).sum (fun z => 15 - tri z + z) + 5 * 4 * 3 = 6 * 5 * 15 := by native_decide
 
 -- ============================================================
+-- Step 4B: Arithmetic-Geometric Sum Identity
+-- ============================================================
+
+/-- The arithmetic-geometric sum identity in Nat-safe additive form:
+    (b-1)² · Σ_{i<n} i·bⁱ + n·bⁿ = (n-1)·b^(n+1) + b
+
+    This is the mathematical bottleneck for the stf closed form.
+    Once proved, steps 4C (correction sum C), 4D (last row rv'),
+    and 4F (full stf = F(b)) follow.
+
+    Proof by cases on b (to handle Nat (b-1)² = 0 when b=0),
+    then induction on n with a ring-provable step lemma. -/
+theorem arith_geom_sum (b n : Nat) (hn : 1 ≤ n) :
+    (b - 1) ^ 2 * (Finset.range n).sum (fun i => i * b ^ i) + n * b ^ n =
+    (n - 1) * b ^ (n + 1) + b := by
+  cases b with
+  | zero =>
+    have hn0 : n ≠ 0 := by omega
+    simp [zero_pow hn0]
+  | succ c =>
+    induction n with
+    | zero => omega
+    | succ m ih =>
+      cases m with
+      | zero => simp
+      | succ k =>
+        have ih := ih (by omega)
+        rw [Finset.sum_range_succ, mul_add]
+        simp only [Nat.succ_sub_one] at *
+        -- Step lemma: must use k+1+1 notation (not k+2) to match
+        -- omega's atoms from the goal and IH after cases m => succ k
+        have hstep : k * (c + 1) ^ (k + 1 + 1) +
+            c ^ 2 * ((k + 1) * (c + 1) ^ (k + 1)) +
+            (k + 1 + 1) * (c + 1) ^ (k + 1 + 1) =
+            (k + 1) * (c + 1) ^ (k + 1 + 1 + 1) +
+            (k + 1) * (c + 1) ^ (k + 1) := by ring
+        omega
+
+-- Bounded verification of arithmetic-geometric sum
+theorem arith_geom_sum_b2_n3 :
+    (2 - 1) ^ 2 * (Finset.range 3).sum (fun i => i * 2 ^ i) + 3 * 2 ^ 3 =
+    (3 - 1) * 2 ^ (3 + 1) + 2 := by native_decide
+
+theorem arith_geom_sum_b10_n4 :
+    (10 - 1) ^ 2 * (Finset.range 4).sum (fun i => i * 10 ^ i) + 4 * 10 ^ 4 =
+    (4 - 1) * 10 ^ (4 + 1) + 10 := by native_decide
+
+theorem arith_geom_sum_b6_n5 :
+    (6 - 1) ^ 2 * (Finset.range 5).sum (fun i => i * 6 ^ i) + 5 * 6 ^ 5 =
+    (5 - 1) * 6 ^ (5 + 1) + 6 := by native_decide
+
+-- ============================================================
 -- PART 5: Bounded Recast Pattern
 -- ============================================================
 
