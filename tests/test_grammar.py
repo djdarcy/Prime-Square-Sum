@@ -707,16 +707,25 @@ class TestVerifyQuantifier:
         assert "closed formula" in str(exc.value).lower()
         assert "n" in str(exc.value)
 
-    def test_no_quantifier_with_free_vars_raises(self, parser, evaluator):
-        """No quantifier with free variables raises ValueError."""
-        expr = parser.parse("primesum(n,2) == 666")
+    def test_implicit_does_exist_with_comparison(self, parser, evaluator):
+        """No quantifier + free vars + comparison → implicit does_exist."""
+        expr = parser.parse("tri(n) == 666")
+        matches = list(find_matches(expr, evaluator, {'n': 100}))
 
-        with pytest.raises(ValueError) as exc:
-            list(find_matches(expr, evaluator, {}))
+        assert len(matches) == 1
+        assert matches[0]['n'] == 36
 
-        assert "free variables" in str(exc.value).lower()
-        assert "n" in str(exc.value)
-        assert "does_exist" in str(exc.value) or "for_any" in str(exc.value)
+    def test_implicit_for_any_bare_term(self, parser, evaluator):
+        """No quantifier + free vars + no comparison → implicit for_any."""
+        expr = parser.parse("tri(n)")
+        matches = list(find_matches(expr, evaluator, {'n': 5}))
+
+        assert len(matches) == 5
+        assert matches[0] == {'n': 1, '__value__': 1}
+        assert matches[1] == {'n': 2, '__value__': 3}
+        assert matches[2] == {'n': 3, '__value__': 6}
+        assert matches[3] == {'n': 4, '__value__': 10}
+        assert matches[4] == {'n': 5, '__value__': 15}
 
     # --- verify_expression convenience function ---
 

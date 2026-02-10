@@ -77,13 +77,18 @@ The 0.8.x series focuses on making the expression system a general-purpose mathe
 - Graceful CTRL+C for long enumerations
 - 812 tests
 
-### v0.8.x goals
+### v0.8.1 (done)
+- Multi-level verbosity (`-v`/`-vv`/`-vvv`), `--quiet`/`-Q`, `--limit N` (#31, #53)
+- Output library (`utils/output.py`) and domain hints (`utils/hints.py`) (#57)
+- All verbose output to stderr (clean stdout for data)
+- 846 tests
+
+### v0.8.x goals (remaining)
 
 **Directive cleanup**
 - Evaluate `verify` deprecation — `solve expr == value` already returns true/false (#45)
 - Rename "quantifier" to "directive" in code, docs, and CLI help (#45)
 - Reduce overlap between `solve` and `for_any` for bare-term expressions
-- Better error messages and mode-selection hints (#53, #57)
 
 **Iterator improvements**
 - Multi-variable strategies: product, parallel, zip, adaptive (#42)
@@ -95,14 +100,13 @@ The 0.8.x series focuses on making the expression system a general-purpose mathe
 **Smart termination**
 - Monotonicity-aware auto-termination (#41)
 - Value-based bounds (`--max-lhs-value`) (#40)
-- `--limit N` for bounded `for_any` enumeration (#53)
 - Early termination for monotonic sequences (#23)
 
 **Output and UX**
+- Channel filtering (`--channels progress,timing`) — Phase 2 of output library
+- Runtime verbosity toggle (signal-based mid-stream control) — Phase 2
 - Configurable output formatting (#55)
 - Enhanced JSON with expression context (#35)
-- Multi-level verbosity (`-v`, `-vv`, `-vvv`) (#31)
-- Structured hints and help system (#57)
 
 ---
 
@@ -119,6 +123,7 @@ The 0.8.x series focuses on making the expression system a general-purpose mathe
 ## v1.0 — Maturity (planned)
 
 - Stable CLI interface
+- Output destination routing — `--output file/clip/stdout/all` (#59)
 - Algebraic solving via `solve` (Newton's method, bisection, inverse lookup)
 - Expression language documentation finalized
 - Lean proofs for core identities complete (#56)

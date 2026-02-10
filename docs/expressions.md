@@ -63,22 +63,24 @@ When you omit the directive, the system auto-detects the mode:
 |------------|---------------|------------|---------------|
 | `primesum(7,2) == 666` | No | Yes | `verify` |
 | `tri(36)` | No | No | `solve` (calculator) |
-| `tri(n) == 666` | Yes | Yes | Error (needs directive) |
-| `tri(n)` | Yes | No | Error (needs directive) |
+| `tri(n) == 666` | Yes | Yes | `does_exist` (search) |
+| `tri(n)` | Yes | No | `for_any` (enumerate) |
 
 ```bash
-# Implicit verify — no directive, no free variables, has comparison
+# Implicit verify — no free variables, has comparison
 --expr "primesum(7,2) == 666"
 
-# Implicit solve — no directive, no free variables, no comparison
+# Implicit solve — no free variables, no comparison
 --expr "tri(36)"
 # Output: 666
-```
 
-If you omit the directive but have free variables, you'll get a helpful error:
-```
-Error: Expression has free variables (n) but no quantifier.
-Use 'does_exist' or 'for_any' prefix, e.g.: does_exist primesum(n,2) == 666
+# Implicit does_exist — free variables with comparison
+--expr "tri(n) == 666"
+# Output: n=36
+
+# Implicit for_any — free variables, no comparison
+--expr "tri(n)" --max-n 5
+# Output: n=1: 1, n=2: 3, n=3: 6, n=4: 10, n=5: 15
 ```
 
 ### Solve Directive (v0.8.0+)
@@ -452,17 +454,57 @@ python prime-square-sum.py --expr "verify primesum(7,2) == 666" --format json
 # {"verified": true}
 ```
 
-## Verbose Mode
+## Verbosity and Output Control (v0.8.1+)
 
-Add `--verbose` for detailed output including timing and parsed expression:
+### Verbosity Levels
+
+Use `-v`, `-vv`, or `-vvv` for increasing detail. All verbose output goes to **stderr**, keeping stdout clean for data.
+
+| Flag | Level | Shows |
+|------|-------|-------|
+| (none) | 0 | Errors and result hints only |
+| `-v` | 1 | Expression, variables, bounds, progress, timing |
+| `-vv` | 2 | Algorithm/config selection, iteration order |
+| `-vvv` | 3 | Internal state, debug detail |
 
 ```bash
-python prime-square-sum.py --target 666 --verbose
-# Expression: does_exist primesum(n,2) == 666
-# Searching n in range [1, 1000000]...
-# Found: n=7
-# Time: 0.023s
+python prime-square-sum.py --target 666 -v
+# stderr: Expression: does_exist primesum(n,2) == 666
+# stderr: Matches: 1
+# stderr: Time: 0.02s
+# stdout: Found: n=7
 ```
+
+### Quiet Mode
+
+`--quiet` / `-Q` suppresses all non-error output (hints, progress, timing):
+
+```bash
+python prime-square-sum.py --expr "solve tri(n)" --max-n 5 -Q
+# n=1: 1
+# n=2: 3
+# ...only data on stdout, nothing else
+```
+
+### Result Limit
+
+`--limit N` caps the number of results for enumeration modes:
+
+```bash
+python prime-square-sum.py --expr "for_any tri(n)" --max-n 1000 --limit 5
+# n=1: 1
+# n=2: 3
+# n=3: 6
+# n=4: 10
+# n=5: 15
+```
+
+### Hints
+
+The system provides context-aware hints on stderr:
+- After `does_exist` with 2+ free vars: suggests `for_any`
+- At `-v`: surfaces implicit default bounds
+- In error messages: suggests the correct directive
 
 ## Expression Validation
 

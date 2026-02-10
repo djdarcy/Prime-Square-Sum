@@ -816,7 +816,6 @@ def find_matches(
     Raises:
         ValueError: If a free variable has no bound or iterator specified
         ValueError: If verify mode is used with free variables
-        ValueError: If no quantifier and expression has free variables
         ValueError: If does_exist is used without a comparison
         ValueError: If for_any bare term has no free variables
 
@@ -853,15 +852,14 @@ def find_matches(
     # Auto-detect quantifier when not specified
     # -------------------------------------------------------------------------
     if quantifier is None:
-        if free_vars:
-            raise ValueError(
-                f"Expression has free variables ({', '.join(sorted(free_vars))}) but no quantifier. "
-                f"Use 'does_exist' or 'for_any' prefix, e.g.: does_exist {expr.body}"
-            )
-        if is_comparison:
-            quantifier = "verify"   # implicit verify: "primesum(7,2) == 666"
+        if free_vars and is_comparison:
+            quantifier = "does_exist"  # implicit search: "primesum(n,2) == 666"
+        elif free_vars and not is_comparison:
+            quantifier = "for_any"     # implicit enumerate: "tri(n)"
+        elif is_comparison:
+            quantifier = "verify"      # implicit verify: "primesum(7,2) == 666"
         else:
-            quantifier = "solve"    # implicit calculator: "primesum(7,2)"
+            quantifier = "solve"       # implicit calculator: "primesum(7,2)"
 
     # -------------------------------------------------------------------------
     # Validate quantifier + form combinations

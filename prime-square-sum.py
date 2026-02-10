@@ -32,6 +32,9 @@ import sys
 import time
 from pathlib import Path
 
+from utils.output import init_output, get_output
+import utils.hints  # noqa: F401 — registers domain hints at import time
+
 # Version
 VERSION_FILE = Path(__file__).parent / "VERSION"
 __version__ = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "0.7.2"
@@ -98,10 +101,11 @@ Examples:
   %(prog)s --list equations
   %(prog)s --list                   # show available categories
 
-Quantifiers:
+Directives/Quantifiers:
   does_exist  Find first match and stop (default)
   for_any     Find all matches within bounds
   verify      Evaluate closed formula, return true/false
+  solve       Compute value (calculator) or enumerate sequences
 
 Comparison operators: ==, !=, <, >, <=, >=
         """
@@ -221,8 +225,20 @@ Comparison operators: ==, !=, <, >, <=, >=
     )
     parser.add_argument(
         '--verbose', '-v',
+        action='count',
+        default=0,
+        help='Increase verbosity (-v=progress, -vv=detail, -vvv=debug)'
+    )
+    parser.add_argument(
+        '--quiet', '-Q',
         action='store_true',
-        help='Show detailed progress and timing'
+        help='Suppress all non-error output (hints, progress, timing)'
+    )
+    parser.add_argument(
+        '--limit',
+        type=int,
+        metavar='N',
+        help='Maximum number of results for enumeration (for_any/solve)'
     )
 
     # === List / Info Commands ===
@@ -286,18 +302,18 @@ Comparison operators: ==, !=, <, >, <=, >=
 
 def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
     """Handle expression evaluation."""
+    out = get_output()
     start_time = time.time()
 
     # Build expression string
     try:
         expr_str = build_expression_from_args(args)
     except (ValueError, NotImplementedError) as e:
-        print(f"Error: {e}", file=sys.stderr)
+        out.error(f"Error: {e}")
         return 1
 
-    if args.verbose:
-        print(f"Expression: {expr_str}")
-        print()
+    out.emit(1, "Expression: {expr}", channel='parse', expr=expr_str)
+    out.emit(1, "", channel='parse')
 
     # Parse expression (Issue #54, Phase 2: configurable imaginary suffixes)
     imag_patterns = {'ii': '[iI][iI]', 'i': '[iI]', 'j': '[jJ]', 'both': '[iIjJ]', 'none': ''}
@@ -307,14 +323,14 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
     try:
         ast = parser.parse(expr_str)
     except ParseError as e:
-        print(f"Parse error: {e}", file=sys.stderr)
+        out.error(f"Parse error: {e}")
         return 1
 
     # Validate expression (compile phase)
     validation_errors = validate_expression(ast, registry)
     if validation_errors:
         for err in validation_errors:
-            print(f"Error: {err}", file=sys.stderr)
+            out.error(f"Error: {err}")
         return 1
 
     # Create evaluator
@@ -328,14 +344,40 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
 
     # Check which variables need bounds
     free_vars = find_free_variables(ast)
-    if args.verbose and free_vars:
-        print(f"Variables: {', '.join(sorted(free_vars))}")
-        print(f"Bounds: {', '.join(f'{k}={v}' for k, v in sorted(bounds.items()) if k in free_vars)}")
-        print()
+    if free_vars:
+        out.emit(1, "Variables: {vars}", channel='iter', vars=', '.join(sorted(free_vars)))
+        bound_info = ', '.join(
+            f'{k}={v:,}' for k, v in sorted(bounds.items()) if k in free_vars
+        )
+        out.emit(1, "Bounds: {bounds}", channel='iter', bounds=bound_info)
+        out.emit(1, "", channel='iter')
+
+        # Hint: surface implicit default bounds (#58)
+        default_bounds = {
+            v: bounds[v] for v in sorted(free_vars)
+            if v in bounds and not _has_explicit_bound(args, v)
+        }
+        if default_bounds:
+            bound_str = ', '.join(f'{v}={val:,}' for v, val in default_bounds.items())
+            flag_str = ', '.join(f'--max-{v}' for v in default_bounds)
+            out.hint('bounds.implicit_defaults', 'verbose',
+                     bounds=bound_str, flags=flag_str)
+
+        # Hint: large search space
+        if len(free_vars) >= 2:
+            space_size = 1
+            for v in free_vars:
+                space_size *= bounds.get(v, 1)
+            out.hint('iteration.large_space', 'verbose', size=space_size)
+
+            # Hint: iteration order
+            out.hint('iteration.cartesian_order', 'verbose',
+                     order=', '.join(sorted(free_vars)))
 
     # Execute
     found_any = False
     match_count = 0
+    limit = getattr(args, 'limit', None)
 
     try:
         for match in find_matches(ast, evaluator, bounds, iterator_factories):
@@ -343,23 +385,27 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
             match_count += 1
             print(format_match(match, args.format))
 
+            # Respect --limit for enumeration modes
+            if limit is not None and match_count >= limit:
+                break
+
             # does_exist stops after first match (handled in find_matches)
             # for_any continues
 
-            if args.verbose and match_count % 100 == 0:
+            if match_count % 100 == 0:
                 elapsed = time.time() - start_time
-                print(f"  ... {match_count} results ({elapsed:.1f}s)", file=sys.stderr)
+                out.progress(match_count, elapsed)
 
     except KeyboardInterrupt:
         # Graceful interruption — results already printed to stdout are preserved
         elapsed = time.time() - start_time
-        print(f"\nInterrupted after {match_count} results ({elapsed:.1f}s)", file=sys.stderr)
+        out.error(f"\nInterrupted after {match_count} results ({elapsed:.1f}s)")
         return 0 if found_any else 1
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        out.error(f"Error: {e}")
         return 1
     except EvaluationError as e:
-        print(f"Evaluation error: {e}", file=sys.stderr)
+        out.error(f"Evaluation error: {e}")
         return 1
 
     # Summary
@@ -368,12 +414,44 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
     if not found_any:
         print(format_no_match(args.format))
 
-    if args.verbose:
-        print()
-        print(f"Matches: {match_count}")
-        print(f"Time: {elapsed:.2f}s")
+    out.emit(1, "", channel='timing')
+    out.emit(1, "Matches: {count}", channel='timing', count=match_count)
+    out.emit(1, "Time: {elapsed:.2f}s", channel='timing', elapsed=elapsed)
+
+    # Post-result hints (separated from results by a blank line)
+    quantifier = ast.quantifier
+    hint_separator_needed = (
+        (quantifier == "does_exist" and found_any and len(free_vars) >= 2)
+        or (quantifier == "does_exist" and limit is not None)
+    )
+    if hint_separator_needed and not out.quiet:
+        out.emit(0, "", channel='hint')
+    if quantifier == "does_exist" and found_any and len(free_vars) >= 2:
+        out.hint('quantifier.use_for_any', 'result')
+    if quantifier == "does_exist" and limit is not None:
+        out.hint('quantifier.limit_with_does_exist', 'result')
 
     return 0 if found_any else 1
+
+
+def _has_explicit_bound(args, var_name: str) -> bool:
+    """Check if a variable's bound was explicitly set via CLI flags."""
+    # Check --max-{var} style flags
+    attr = f'max_{var_name}'
+    if hasattr(args, attr):
+        # argparse sets defaults; check if user provided it
+        # Default values: n=1000000, m=10000
+        defaults = {'max_n': 1000000, 'max_m': 10000}
+        val = getattr(args, attr)
+        if attr in defaults and val == defaults[attr]:
+            return False  # Still at default
+        return True
+    # Check --iter-var overrides
+    if args.iter_var:
+        for spec in args.iter_var:
+            if spec.startswith(f'{var_name}:'):
+                return True
+    return False
 
 
 # =============================================================================
@@ -407,6 +485,12 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
+    # Initialize output manager (#31, #57)
+    out = init_output(
+        verbosity=args.verbose if not args.quiet else 0,
+        quiet=args.quiet,
+    )
+
     # Load config for algorithm defaults (Issue #29)
     # Precedence: CLI > config.json > auto-detection
     config = load_config()
@@ -414,18 +498,18 @@ def main():
     # Apply config.json algorithm settings first (lower precedence)
     if config.algorithms.get('sieve'):
         configure_sieve(algorithm=config.algorithms['sieve'])
-        if args.verbose:
-            print(f"[INFO] Sieve algorithm (config): {config.algorithms['sieve']}")
+        out.emit(2, "[config] Sieve algorithm: {algo}",
+                 channel='config', algo=config.algorithms['sieve'])
 
     if config.max_memory_mb:
         configure_sieve(max_memory_mb=config.max_memory_mb)
-        if args.verbose:
-            print(f"[INFO] Max memory (config): {config.max_memory_mb} MB")
+        out.emit(2, "[config] Max memory: {mb} MB",
+                 channel='config', mb=config.max_memory_mb)
 
     if config.prefer:
         configure_sieve(prefer=config.prefer)
-        if args.verbose:
-            print(f"[INFO] Resource preference (config): {config.prefer}")
+        out.emit(2, "[config] Resource preference: {pref}",
+                 channel='config', pref=config.prefer)
 
     # Apply CLI flags (higher precedence, overrides config)
     if args.algorithm:
@@ -433,24 +517,23 @@ def main():
             algo_class, algo_variant = parse_algorithm_arg(args.algorithm)
             if algo_class == "sieve":
                 configure_sieve(algorithm=algo_variant)
-                if args.verbose:
-                    print(f"[INFO] Sieve algorithm (CLI): {algo_variant}")
+                out.emit(2, "[cli] Sieve algorithm: {algo}",
+                         channel='algorithm', algo=algo_variant)
             else:
-                print(f"Warning: Unknown algorithm class '{algo_class}', ignoring",
-                      file=sys.stderr)
+                out.error(f"Warning: Unknown algorithm class '{algo_class}', ignoring")
         except ValueError as e:
-            print(f"Error: {e}", file=sys.stderr)
+            out.error(f"Error: {e}")
             return 1
 
     if args.max_memory:
         configure_sieve(max_memory_mb=args.max_memory)
-        if args.verbose:
-            print(f"[INFO] Max memory (CLI): {args.max_memory} MB")
+        out.emit(2, "[cli] Max memory: {mb} MB",
+                 channel='algorithm', mb=args.max_memory)
 
     if args.prefer:
         configure_sieve(prefer=args.prefer)
-        if args.verbose:
-            print(f"[INFO] Resource preference (CLI): {args.prefer}")
+        out.emit(2, "[cli] Resource preference: {pref}",
+                 channel='algorithm', pref=args.prefer)
 
     # Initialize GPU (if not disabled)
     if not args.no_gpu:
@@ -463,14 +546,14 @@ def main():
     if args.functions:
         for func_file in args.functions:
             if not func_file.exists():
-                print(f"Warning: Function file not found: {func_file}", file=sys.stderr)
+                out.error(f"Warning: Function file not found: {func_file}")
                 continue
             try:
                 count = registry.load_from_file(str(func_file))
-                if args.verbose:
-                    print(f"Loaded {count} function(s) from {func_file}")
+                out.emit(1, "Loaded {count} function(s) from {path}",
+                         channel='config', count=count, path=func_file)
             except Exception as e:
-                print(f"Error loading {func_file}: {e}", file=sys.stderr)
+                out.error(f"Error loading {func_file}: {e}")
 
     # === Handle Special Modes ===
 

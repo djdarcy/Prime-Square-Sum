@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2026-02-09
+
+### Added
+- **Multi-level verbosity** (`-v`/`-vv`/`-vvv`) replacing boolean `--verbose` (Issue #31)
+  - Level 1 (`-v`): Expression, variables, bounds, progress, timing
+  - Level 2 (`-vv`): Algorithm/config selection, iteration order, format tips
+  - Level 3 (`-vvv`): Internal state and debug detail
+- **`--quiet` / `-Q`** flag to suppress all non-error output
+- **`--limit N`** flag to cap enumeration results for `for_any`/`solve` (Issue #53)
+- **Output library** (`utils/output.py`) — reusable OutputManager with:
+  - Verbosity-gated `emit()` with named `channel` parameter
+  - Templatized hint registry with context-aware display and session dedup
+  - `error()` method that bypasses quiet mode
+  - Module-level singleton via `init_output()`/`get_output()`
+- **Domain hints** (`utils/hints.py`) — self-registering hint content:
+  - `quantifier.*` — directive guidance (use for_any, use solve, use verify)
+  - `bounds.*` — implicit default bounds transparency (#58)
+  - `iteration.*` — search space size, alphabetical iteration order
+  - `format.*` — machine-readable output suggestions
+- **Post-result hints**: `does_exist` with 2+ free vars shows "use for_any" tip; `does_exist` with `--limit` shows "use for_any --limit N" tip
+- **Implicit directive detection** for expressions with free variables:
+  - `tri(n) == 666` (free vars + comparison) → implicit `does_exist`
+  - `tri(n)` (free vars + no comparison) → implicit `for_any` (enumerate)
+- 39 new tests (29 output library + 4 verbose/quiet CLI + 4 limit + 2 implicit detection) — 846 total
+
+### Changed
+- All verbose/progress output now goes to **stderr** (was stdout), preserving clean stdout for data
+- `--verbose` uses `action='count'` (backwards compatible: `-v` still works)
+- Algorithm/config messages use structured channels ('config', 'algorithm', 'iter', etc.)
+
+### Fixed
+- Implicit mode detection no longer errors on expressions with free variables — auto-selects `does_exist` or `for_any`
+- Error message for free-variable expressions no longer leaks raw AST representation
+
+### Design Documents
+- `2026-02-09__15-34-10__dev-workflow_verbosity-hint-channel-system.md`
+
 ## [0.8.0] - 2026-02-09
 
 ### Added

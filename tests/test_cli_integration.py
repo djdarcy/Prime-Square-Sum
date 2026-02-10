@@ -354,26 +354,101 @@ class TestVerifyQuantifier:
 # =============================================================================
 
 class TestVerboseMode:
-    """Test --verbose flag."""
+    """Test --verbose flag (output goes to stderr, not stdout)."""
 
     def test_verbose_shows_expression(self):
-        """--verbose shows the parsed expression."""
+        """--verbose shows the parsed expression on stderr."""
         code, stdout, stderr = run_cli(
             "--target", "666",
             "--verbose"
         )
         assert code == 0
-        assert "Expression:" in stdout
-        assert "primesum" in stdout
+        assert "Expression:" in stderr
+        assert "primesum" in stderr
 
     def test_verbose_shows_timing(self):
-        """--verbose shows timing information."""
+        """--verbose shows timing information on stderr."""
         code, stdout, stderr = run_cli(
             "--target", "666",
             "--verbose"
         )
         assert code == 0
-        assert "Time:" in stdout
+        assert "Time:" in stderr
+
+    def test_verbose_levels(self):
+        """-vv shows more detail than -v."""
+        code1, stdout1, stderr1 = run_cli(
+            "--target", "666", "-v"
+        )
+        code2, stdout2, stderr2 = run_cli(
+            "--target", "666", "-vv"
+        )
+        assert code1 == 0 and code2 == 0
+        # Both show expression
+        assert "Expression:" in stderr1
+        assert "Expression:" in stderr2
+
+    def test_quiet_suppresses_verbose(self):
+        """-Q suppresses verbose output."""
+        code, stdout, stderr = run_cli(
+            "--target", "666", "-v", "-Q"
+        )
+        assert code == 0
+        assert "Expression:" not in stderr
+        assert "Time:" not in stderr
+        # Results still appear on stdout
+        assert "Found" in stdout or "n=" in stdout
+
+
+# =============================================================================
+# Limit Tests (Issue #53)
+# =============================================================================
+
+class TestLimit:
+    """Test --limit flag for bounded enumeration."""
+
+    def test_limit_caps_for_any(self):
+        """--limit 3 with for_any returns at most 3 results."""
+        code, stdout, stderr = run_cli(
+            "--expr", "for_any tri(n)",
+            "--max-n", "100",
+            "--limit", "3"
+        )
+        assert code == 0
+        lines = [l for l in stdout.strip().splitlines() if l.strip()]
+        assert len(lines) == 3
+
+    def test_limit_caps_solve_enumeration(self):
+        """--limit works with solve enumeration too."""
+        code, stdout, stderr = run_cli(
+            "--expr", "solve tri(n)",
+            "--max-n", "100",
+            "--limit", "5"
+        )
+        assert code == 0
+        lines = [l for l in stdout.strip().splitlines() if l.strip()]
+        assert len(lines) == 5
+
+    def test_no_limit_returns_all(self):
+        """Without --limit, all matches are returned."""
+        code, stdout, stderr = run_cli(
+            "--expr", "for_any tri(n)",
+            "--max-n", "10"
+        )
+        assert code == 0
+        lines = [l for l in stdout.strip().splitlines() if l.strip()]
+        assert len(lines) == 10  # tri(1) through tri(10)
+
+    def test_limit_with_does_exist_shows_hint(self):
+        """--limit with does_exist shows hint to use for_any instead."""
+        code, stdout, stderr = run_cli(
+            "--expr", "does_exist tri(n) == 666",
+            "--max-n", "1000",
+            "--limit", "5"
+        )
+        assert code == 0
+        assert "--limit has no effect with does_exist" in stderr
+        assert "for_any" in stderr
 
 
 # =============================================================================
