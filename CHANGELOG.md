@@ -2,6 +2,81 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2026-02-09
+
+### Added
+- **Multi-level verbosity** (`-v`/`-vv`/`-vvv`) replacing boolean `--verbose` (Issue #31)
+  - Level 1 (`-v`): Expression, variables, bounds, progress, timing
+  - Level 2 (`-vv`): Algorithm/config selection, iteration order, format tips
+  - Level 3 (`-vvv`): Internal state and debug detail
+- **`--quiet` / `-Q`** flag to suppress all non-error output
+- **`--limit N`** flag to cap enumeration results for `for_any`/`solve` (Issue #53)
+- **Output library** (`utils/output.py`) — reusable OutputManager with:
+  - Verbosity-gated `emit()` with named `channel` parameter
+  - Templatized hint registry with context-aware display and session dedup
+  - `error()` method that bypasses quiet mode
+  - Module-level singleton via `init_output()`/`get_output()`
+- **Domain hints** (`utils/hints.py`) — self-registering hint content:
+  - `quantifier.*` — directive guidance (use for_any, use solve, use verify)
+  - `bounds.*` — implicit default bounds transparency (#58)
+  - `iteration.*` — search space size, alphabetical iteration order
+  - `format.*` — machine-readable output suggestions
+- **Post-result hints**: `does_exist` with 2+ free vars shows "use for_any" tip; `does_exist` with `--limit` shows "use for_any --limit N" tip
+- **Implicit directive detection** for expressions with free variables:
+  - `tri(n) == 666` (free vars + comparison) → implicit `does_exist`
+  - `tri(n)` (free vars + no comparison) → implicit `for_any` (enumerate)
+- 39 new tests (29 output library + 4 verbose/quiet CLI + 4 limit + 2 implicit detection) — 846 total
+
+### Changed
+- All verbose/progress output now goes to **stderr** (was stdout), preserving clean stdout for data
+- `--verbose` uses `action='count'` (backwards compatible: `-v` still works)
+- Algorithm/config messages use structured channels ('config', 'algorithm', 'iter', etc.)
+
+### Fixed
+- Implicit mode detection no longer errors on expressions with free variables — auto-selects `does_exist` or `for_any`
+- Error message for free-variable expressions no longer leaks raw AST representation
+
+### Design Documents
+- `2026-02-09__15-34-10__dev-workflow_verbosity-hint-channel-system.md`
+
+## [0.8.0] - 2026-02-09
+
+### Added
+- **`solve` directive** for calculator and enumeration modes (Issue #36, #51)
+  - Calculator mode: `--expr "solve tri(36)"` → `666` (no free vars, no comparison)
+  - Verify mode: `--expr "solve primesum(7,2) == 666"` → `true` (no free vars, with comparison)
+  - Value enumeration: `--expr "solve tri(n)" --max-n 10` → tabulates values (free vars, no comparison)
+  - With comparison + free vars: acts like `does_exist` (finds first match)
+- **Sequence enumeration** via bare-term expressions
+  - `for_any` with bare terms: `--expr "for_any tri(n)" --max-n 10` enumerates values
+  - Multi-variable: `--expr "for_any tri(n) + tri(m)"` enumerates all combinations
+  - Output: `n=7: 666` (text), `{"variables": {"n": 7}, "value": 666}` (json), `7,666` (csv)
+- **Implicit `solve` auto-detection** — bare term with no directive and no free vars becomes calculator
+  - `--expr "tri(36)"` → `666` (previously required `verify`)
+- **`_is_comparison()` recursive helper** — traverses BinaryOp, UnaryOp, ContextBlock to detect comparison nodes
+- **Graceful CTRL+C** for long enumerations — partial results preserved, summary to stderr
+- `_json_safe()` helper for complex number JSON serialization
+- 32 new tests (13 enumeration + 11 solve + 8 format) — 812 total, zero regressions
+
+### Changed
+- `find_matches()` rewritten with 7 code paths based on directive × comparison × free-variables matrix
+- `format_match()` handles `__solve_result__` and `__value__` output modes
+- Implicit mode detection: no directive + no comparison + no free vars → `solve` (was `verify`)
+- `does_exist` with bare terms (no comparison) now gives a helpful error with hint
+
+### Known Limitations
+- **Implicit default bounds**: Multi-variable enumeration uses `--max-n=1000000` and `--max-m=10000` by default. The 100x asymmetry reflects the primary use case (primesum(n,2) needs large n ranges; m is for cross-sequence matching). These bounds are not surfaced in non-verbose output — a "Not found" result means "not found within bounds", not "does not exist." Use `--verbose` to see search ranges, or set explicit bounds. See #58 for planned improvements.
+- **Cartesian product iteration**: Multi-variable expressions iterate via `itertools.product` with alphabetical variable ordering. For two variables this can produce very large search spaces (e.g., 10B combinations for n×m). Diagonal/interleaved strategies are planned (#42).
+
+### Related Issues
+- Issue #36: Sequence enumeration
+- Issue #51: Solve directive
+- Issue #55: v0.8.x roadmap
+
+### Design Documents
+- `2026-02-09__01-14-36__dev-workflow_issue36-implementation-plan.md`
+- `2026-02-08__11-01-03__issue36-sequence-enumeration-and-solve-quantifier-analysis.md`
+
 ## [0.7.22] - 2026-02-10
 
 ### Added

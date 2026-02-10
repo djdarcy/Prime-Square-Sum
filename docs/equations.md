@@ -77,7 +77,7 @@ The `equations.json` file contains saved equations indexed by ID:
 | `description` | Human-readable description | - |
 | `default` | Mark as default equation | `false` |
 | `operator` | Comparison operator | `==` |
-| `quantifier` | `does_exist`, `for_any`, `verify` | `does_exist` |
+| `quantifier` | `does_exist`, `for_any`, `verify`, `solve` | `does_exist` |
 | `bounds` | Variable bounds | - |
 | `parameters` | User-configurable parameters | - |
 

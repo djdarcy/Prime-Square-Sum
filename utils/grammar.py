@@ -102,7 +102,7 @@ class ContextBlock(ASTNode):
 @dataclass
 class Expression(ASTNode):
     """A complete expression with quantifier and body."""
-    quantifier: Optional[str]  # "for_any", "does_exist", "verify", or None (auto-detect)
+    quantifier: Optional[str]  # "for_any", "does_exist", "verify", "solve", or None (auto-detect)
     body: ASTNode
 
 
@@ -116,6 +116,7 @@ GRAMMAR = r"""
     quantifier: "for_any" -> for_any
               | "does_exist" -> does_exist
               | "verify" -> verify
+              | "solve" -> solve
 
     // Precedence hierarchy (lowest → highest binding):
     //   1.  or, ||                     (logical OR, left-assoc)
@@ -251,6 +252,9 @@ class ASTTransformer(Transformer):
 
     def verify(self) -> str:
         return "verify"
+
+    def solve(self) -> str:
+        return "solve"
 
     def comparison(self, *args) -> Comparison:
         # args = [operand1, op1, operand2, op2, operand3, ...]
@@ -536,6 +540,25 @@ def _walk_validate(node: ASTNode, registry: FunctionRegistry, errors: List[str])
 # Free Variable Detection
 # =============================================================================
 
+def _is_comparison(node: ASTNode) -> bool:
+    """Check if an AST node contains any Comparison (relational operators like ==, <, etc.).
+
+    Returns True for direct Comparisons and for boolean expressions (and/or/not)
+    that contain Comparisons. Returns False for pure arithmetic/function expressions.
+    """
+    if isinstance(node, Comparison):
+        return True
+    if isinstance(node, BinaryOp):
+        return _is_comparison(node.left) or _is_comparison(node.right)
+    if isinstance(node, UnaryOp):
+        return _is_comparison(node.operand)
+    if isinstance(node, ContextBlock):
+        return _is_comparison(node.body)
+    if isinstance(node, Expression):
+        return _is_comparison(node.body)
+    return False
+
+
 def find_free_variables(node: ASTNode) -> Set[str]:
     """
     Find all unbound variable names in an AST.
@@ -768,9 +791,12 @@ def find_matches(
     """
     Find all variable assignments that satisfy the expression.
 
-    For does_exist quantifier, yields the first match and stops.
-    For for_any quantifier, yields all matches.
-    For verify quantifier (or auto-detected), yields {"__verify_result__": bool}.
+    Supports five output modes based on quantifier and expression form:
+    - does_exist + comparison: yields first match dict and stops
+    - for_any + comparison: yields all match dicts
+    - for_any + bare term: yields {vars..., __value__: computed} for each combination
+    - verify (or implicit + comparison): yields {"__verify_result__": bool}
+    - solve + bare term (or implicit + bare term, no free vars): yields {"__solve_result__": value}
 
     Args:
         expr: Parsed expression with quantifier
@@ -783,67 +809,111 @@ def find_matches(
 
     Yields:
         Dict mapping variable names to values that satisfy comparison,
-        or {"__verify_result__": bool} for verify mode
+        {"__verify_result__": bool} for verify/truth-check mode,
+        {"__solve_result__": value} for calculator mode, or
+        {vars..., "__value__": value} for value enumeration mode
 
     Raises:
         ValueError: If a free variable has no bound or iterator specified
         ValueError: If verify mode is used with free variables
-        ValueError: If no quantifier and expression has free variables
+        ValueError: If does_exist is used without a comparison
+        ValueError: If for_any bare term has no free variables
 
     Example:
         parser = ExpressionParser()
         registry = FunctionRegistry()
         evaluator = ExpressionEvaluator(registry)
 
-        # Using bounds (backwards compatible)
+        # Search mode (existing)
         expr = parser.parse("does_exist primesum(n,2) == 666")
         for match in find_matches(expr, evaluator, {'n': 100}):
             print(match)  # {'n': 7}
 
-        # Using iterator_factories
-        from utils.iterators import IntIterator
-        expr = parser.parse("for_any primesum(n,2) == tri(m)")
-        for match in find_matches(expr, evaluator, {}, {
-            'n': lambda: IntIterator(1, 100, 2),  # odd numbers only
-            'm': lambda: IntIterator(1, 50)
-        }):
-            print(match)
+        # Value enumeration mode (new)
+        expr = parser.parse("for_any primesum(n,2)")
+        for match in find_matches(expr, evaluator, {'n': 10}):
+            print(match)  # {'n': 1, '__value__': 4}, {'n': 2, '__value__': 13}, ...
 
-        # Verify mode
+        # Calculator mode (new)
+        expr = parser.parse("solve (1+2)**2 * 3")
+        for match in find_matches(expr, evaluator, {}):
+            print(match)  # {'__solve_result__': 27}
+
+        # Verify mode (existing)
         expr = parser.parse("verify primesum(7,2) == 666")
         for match in find_matches(expr, evaluator, {}):
             print(match)  # {'__verify_result__': True}
     """
     free_vars = find_free_variables(expr)
     quantifier = expr.quantifier
+    is_comparison = _is_comparison(expr.body)
 
+    # -------------------------------------------------------------------------
     # Auto-detect quantifier when not specified
+    # -------------------------------------------------------------------------
     if quantifier is None:
-        if free_vars:
-            raise ValueError(
-                f"Expression has free variables ({', '.join(sorted(free_vars))}) but no quantifier. "
-                f"Use 'does_exist' or 'for_any' prefix, e.g.: does_exist {expr.body}"
-            )
-        # No free vars and no quantifier -> implicit verify mode
-        quantifier = "verify"
+        if free_vars and is_comparison:
+            quantifier = "does_exist"  # implicit search: "primesum(n,2) == 666"
+        elif free_vars and not is_comparison:
+            quantifier = "for_any"     # implicit enumerate: "tri(n)"
+        elif is_comparison:
+            quantifier = "verify"      # implicit verify: "primesum(7,2) == 666"
+        else:
+            quantifier = "solve"       # implicit calculator: "primesum(7,2)"
 
-    # Validate verify mode - must have no free variables
+    # -------------------------------------------------------------------------
+    # Validate quantifier + form combinations
+    # -------------------------------------------------------------------------
+
+    # does_exist requires a comparison (bare terms find first truthy = n=1, not useful)
+    if quantifier == "does_exist" and not is_comparison:
+        raise ValueError(
+            "'does_exist' requires a comparison (e.g., does_exist n**2 == 25). "
+            "To enumerate values, use 'for_any'. To compute a value, use 'solve'."
+        )
+
+    # for_any with bare term but no free vars — nothing to enumerate
+    if quantifier == "for_any" and not is_comparison and not free_vars:
+        raise ValueError(
+            "'for_any' requires free variables for enumeration. "
+            "Use 'solve' to compute a value, or 'verify' to check truthiness."
+        )
+
+    # -------------------------------------------------------------------------
+    # verify mode — closed formula, no free variables, yields truth value
+    # -------------------------------------------------------------------------
     if quantifier == "verify":
         if free_vars:
             raise ValueError(
                 f"'verify' requires a closed formula (no free variables), "
                 f"but found: {', '.join(sorted(free_vars))}"
             )
-        # Evaluate and yield result
         result = evaluator.evaluate(expr.body, {})
         yield {"__verify_result__": bool(result)}
         return
+
+    # -------------------------------------------------------------------------
+    # solve mode — no free variables
+    # -------------------------------------------------------------------------
+    if quantifier == "solve" and not free_vars:
+        result = evaluator.evaluate(expr.body, {})
+        if is_comparison:
+            # solve <comparison> with no free vars → verify-like truth check
+            yield {"__verify_result__": bool(result)}
+        else:
+            # solve <bare term> with no free vars → calculator mode
+            yield {"__solve_result__": result}
+        return
+
+    # -------------------------------------------------------------------------
+    # From here: quantifier requires iteration (free vars present)
+    # -------------------------------------------------------------------------
 
     # Initialize iterator_factories if not provided
     if iterator_factories is None:
         iterator_factories = {}
 
-    # Validate all free variables have bounds or iterator factories (for does_exist / for_any)
+    # Validate all free variables have bounds or iterator factories
     covered_vars = set(bounds.keys()) | set(iterator_factories.keys())
     missing = free_vars - covered_vars
     if missing:
@@ -853,12 +923,6 @@ def find_matches(
             f"Missing bounds for variable(s): {', '.join(missing_list)}. "
             f"Use {suggestions} to specify."
         )
-
-    # Handle no-variable case for does_exist/for_any (e.g., "does_exist tri(4) == 10")
-    if not free_vars:
-        if evaluator.evaluate(expr.body, {}):
-            yield {}
-        return
 
     # Build iterators for each variable
     # iterator_factories takes precedence over bounds
@@ -879,12 +943,33 @@ def find_matches(
     # Track if we've validated functions (do this on first iteration)
     functions_validated = False
 
+    # -------------------------------------------------------------------------
+    # Value enumeration: for_any/solve with bare term + free vars
+    # -------------------------------------------------------------------------
+    if not is_comparison and quantifier in ("for_any", "solve"):
+        for values in itertools.product(*ranges):
+            context = dict(zip(var_list, values))
+            try:
+                result = evaluator.evaluate(expr.body, context)
+                yield {**context, '__value__': result}
+                functions_validated = True
+            except EvaluationError as e:
+                error_msg = str(e).lower()
+                if "unknown function" in error_msg or not functions_validated:
+                    raise
+                continue
+        return
+
+    # -------------------------------------------------------------------------
+    # Comparison-based search/enumeration (existing behavior)
+    # does_exist/for_any/solve with comparison + free vars
+    # -------------------------------------------------------------------------
     for values in itertools.product(*ranges):
         context = dict(zip(var_list, values))
         try:
             if evaluator.evaluate(expr.body, context):
                 yield context.copy()
-                if quantifier == "does_exist":
+                if quantifier in ("does_exist", "solve"):
                     return  # Stop at first match
             functions_validated = True  # If we got here, functions are valid
         except EvaluationError as e:

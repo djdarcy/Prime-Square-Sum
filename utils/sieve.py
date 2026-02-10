@@ -113,8 +113,8 @@ def _warn_no_primesieve():
     _primesieve_warned = True
     warnings.warn(
         "primesieve not available - using slower Python fallback.\n"
-        "  Install: pip install primesieve (Linux/Mac)\n"
-        "           conda install -c conda-forge primesieve (Windows)\n"
+        "  Install: pip install primesieve\n"
+        "     conda: conda install -c conda-forge python-primesieve\n"
         "  Silence: set PRIME_SQUARE_SUM_QUIET=1"
     )
 

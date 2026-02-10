@@ -139,6 +139,47 @@ catalan(5) = 42
 catalan(10) = 16796
 ```
 
+### Complex Number Functions (pss, v0.7.18+)
+
+#### `complex(real, imag)`
+Create a complex number from real and imaginary parts.
+
+**Examples:**
+```
+complex(3, 4) = (3+4j)
+complex(0, 1) = 1j
+complex(5, 0) = (5+0j)
+```
+
+#### `real(z)`
+Extract the real part of a complex number.
+
+**Examples:**
+```
+real(complex(3, 4)) = 3.0
+real(5) = 5       # works on real numbers too
+```
+
+#### `imag(z)`
+Extract the imaginary part of a complex number.
+
+**Examples:**
+```
+imag(complex(3, 4)) = 4.0
+imag(5) = 0       # real numbers have zero imaginary part
+```
+
+#### `conj(z)`
+Complex conjugate — negates the imaginary part.
+
+**Examples:**
+```
+conj(complex(3, 4)) = (3-4j)
+conj(complex(0, 1)) = -1j
+```
+
+**Note:** `sqrt()` and `abs()` also work with complex inputs. `abs(complex(3, 4))` returns 5 (magnitude). See [expressions.md](expressions.md) for imaginary literal syntax (opt-in).
+
 ### Utility Functions (pss)
 
 #### `digital_root(x)`

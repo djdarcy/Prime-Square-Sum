@@ -93,9 +93,23 @@ python prime-square-sum.py --expr "verify 2^3 == 8"          # ^ is power by def
 
 See [docs/expressions.md](docs/expressions.md) for the precedence table and behavioral notes.
 
+### Solve & Enumerate (v0.8.0+)
+
+Use `solve` as a calculator or to enumerate sequence values:
+
+```bash
+# Calculator mode — evaluate an expression directly
+python prime-square-sum.py --expr "solve tri(36)"                    # 666
+python prime-square-sum.py --expr "tri(36)"                          # 666 (implicit)
+
+# Enumerate sequence values
+python prime-square-sum.py --expr "solve tri(n)" --max-n 10          # n=1: 1, n=2: 3, ...
+python prime-square-sum.py --expr "for_any primesum(n,2)" --max-n 7  # tabulate squared prime sums
+```
+
 ### Verify Mode (v0.7.6+)
 
-Verify known results without iteration using the `verify` quantifier:
+Verify known results without iteration using the `verify` directive:
 
 ```bash
 # Explicit verify - returns true/false
@@ -112,7 +126,7 @@ python prime-square-sum.py --expr "verify primesum(7,2) == trisum(10)" --format 
 # Returns: {"verified": true}
 ```
 
-The `verify` quantifier evaluates closed formulas (no free variables) directly, returning `true` or `false` without any iteration.
+The `verify` directive evaluates closed formulas (no free variables) directly, returning `true` or `false` without any iteration.
 
 ### Algorithm Selection (v0.7.5+)
 
@@ -174,8 +188,9 @@ For venv, pip, Docker, GPU setup, and detailed troubleshooting, see [docs/instal
 
 | Document | Description |
 |----------|-------------|
+| [ROADMAP.md](ROADMAP.md) | Version history and planned features |
 | [docs/rationale.md](docs/rationale.md) | Why this tool exists: computational irreducibility |
-| [docs/expressions.md](docs/expressions.md) | Expression syntax, quantifiers, operators |
+| [docs/expressions.md](docs/expressions.md) | Expression syntax, directives, operators |
 | [docs/equations.md](docs/equations.md) | Saved equations and `equations.json` format |
 | [docs/functions.md](docs/functions.md) | Function reference and custom functions |
 | [docs/install.md](docs/install.md) | Installation and setup guide |
@@ -215,11 +230,9 @@ Prime-Square-Sum/
 
 ## Roadmap
 
-- [x] GPU acceleration (CuPy) - v0.5.1
-- [ ] Distributed computing
-- [ ] Alternative primality testing
+See [ROADMAP.md](ROADMAP.md) for version history and planned features.
 
-See [Issue #1](https://github.com/djdarcy/Prime-Square-Sum/issues/1) for details.
+Current: **v0.8.x** — sequence enumeration, `solve` directive, iterator improvements, CLI cleanup.
 
 ## Related
 
