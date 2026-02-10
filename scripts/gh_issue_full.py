@@ -5,6 +5,9 @@ cross-references, commits, sub-issues, and all metadata.
 
 Usage:
     python scripts/gh_issue_full.py 24
+    python scripts/gh_issue_full.py 24 --full      # Complete body + all comments untruncated
+    python scripts/gh_issue_full.py 24 --full --edit 1     # View the original (first) version
+    python scripts/gh_issue_full.py 24 --full --edit 3     # View version 3
     python scripts/gh_issue_full.py 24 --json
     python scripts/gh_issue_full.py 24 --compact
     python scripts/gh_issue_full.py 24 --ascii    # Force ASCII mode (no emoji)
@@ -116,7 +119,7 @@ def run_gh(args: list[str]) -> dict | list | None:
 def get_issue_basic(issue_num: int, repo: str = None) -> dict | None:
     """Get basic issue information."""
     cmd = ["issue", "view", str(issue_num),
-           "--json", "number,title,state,body,author,labels,assignees,milestone,createdAt,closedAt,comments"]
+           "--json", "number,title,state,body,author,labels,assignees,milestone,createdAt,updatedAt,closedAt,comments"]
     if repo:
         cmd.extend(["--repo", repo])
     return run_gh(cmd)
@@ -150,6 +153,41 @@ def get_sub_issues(owner: str, repo: str, issue_num: int) -> dict | None:
         "-H", "GraphQL-Features: sub_issues",
         "-f", f"query={query}"
     ])
+
+
+def get_edit_history(owner: str, repo: str, issue_num: int) -> dict | None:
+    """Get edit history for issue body and comments via GraphQL userContentEdits."""
+    query = f'''
+    query {{
+        repository(owner: "{owner}", name: "{repo}") {{
+            issue(number: {issue_num}) {{
+                userContentEdits(first: 100) {{
+                    totalCount
+                    nodes {{
+                        createdAt
+                        editedAt
+                        diff
+                    }}
+                }}
+                comments(first: 100) {{
+                    nodes {{
+                        databaseId
+                        createdAt
+                        userContentEdits(first: 100) {{
+                            totalCount
+                            nodes {{
+                                createdAt
+                                editedAt
+                                diff
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }}
+    }}
+    '''
+    return run_gh(["api", "graphql", "-f", f"query={query}"])
 
 
 def get_repo_info() -> tuple[str, str] | None:
@@ -243,7 +281,48 @@ def print_section(title: str, content: str = "", items: list = None):
             print(f"  {item}")
 
 
-def display_issue(issue_num: int, repo: str = None, output_json: bool = False, compact: bool = False):
+def parse_edit_versions(edit_data: dict | None) -> dict:
+    """Parse GraphQL userContentEdits response into structured version data.
+
+    Returns dict with:
+      - body_versions: list of body texts, chronological (index 0 = original)
+      - body_edit_count: total number of versions
+      - comment_versions: dict mapping comment index to list of versions
+      - comment_edit_counts: dict mapping comment index to version count
+    """
+    result = {
+        "body_versions": [],
+        "body_edit_count": 0,
+        "comment_versions": {},
+        "comment_edit_counts": {},
+    }
+
+    if not edit_data or "data" not in edit_data:
+        return result
+
+    issue = edit_data["data"]["repository"]["issue"]
+    if not issue:
+        return result
+
+    # Body versions (GraphQL returns newest-first, reverse for chronological)
+    body_edits = issue.get("userContentEdits", {})
+    result["body_edit_count"] = body_edits.get("totalCount", 0)
+    nodes = body_edits.get("nodes", [])
+    result["body_versions"] = [n["diff"] for n in reversed(nodes) if n.get("diff")]
+
+    # Comment versions
+    for i, comment in enumerate(issue.get("comments", {}).get("nodes", [])):
+        c_edits = comment.get("userContentEdits", {})
+        count = c_edits.get("totalCount", 0)
+        result["comment_edit_counts"][i] = count
+        c_nodes = c_edits.get("nodes", [])
+        result["comment_versions"][i] = [n["diff"] for n in reversed(c_nodes) if n.get("diff")]
+
+    return result
+
+
+def display_issue(issue_num: int, repo: str = None, output_json: bool = False,
+                  compact: bool = False, full: bool = False, version: int | None = None):
     """Display full issue information."""
 
     # Get repo info - use explicit repo if provided, otherwise auto-detect
@@ -267,6 +346,12 @@ def display_issue(issue_num: int, repo: str = None, output_json: bool = False, c
 
     timeline = get_issue_timeline(owner, repo_name, issue_num) or []
     sub_issues_data = get_sub_issues(owner, repo_name, issue_num)
+
+    # Fetch edit history when --full or --version is used
+    edit_versions = None
+    if full or version is not None:
+        edit_data = get_edit_history(owner, repo_name, issue_num)
+        edit_versions = parse_edit_versions(edit_data)
 
     # Process timeline
     events = process_timeline(timeline)
@@ -361,32 +446,100 @@ def display_issue(issue_num: int, repo: str = None, output_json: bool = False, c
             print(f"  \"{rename['from']}\"")
             print(f"  → \"{rename['to']}\"")
 
-    # Body (truncated)
+    # Body
+    was_truncated = False
     if basic.get("body") and not compact:
-        print_section("BODY (first 500 chars)")
-        body = basic["body"][:500]
-        if len(basic["body"]) > 500:
-            body += "..."
-        print(body)
+        body_total = edit_versions["body_edit_count"] if edit_versions else 0
+        body_ver = version if version is not None else body_total
 
-    # Comments summary
+        if full or version is not None:
+            # Determine which version to show
+            if version is not None and edit_versions and edit_versions["body_versions"]:
+                versions = edit_versions["body_versions"]
+                if version < 1 or version > len(versions):
+                    print(f"Error: --edit {version} out of range (1..{len(versions)})", file=sys.stderr)
+                    sys.exit(1)
+                body_text = versions[version - 1]
+            else:
+                body_text = basic["body"]
+
+            ver_label = f" (version {body_ver}/{body_total})" if body_total > 1 else ""
+            print_section(f"BODY{ver_label}")
+            print(body_text)
+        else:
+            body_text = basic["body"]
+            edited = basic.get("createdAt") != basic.get("updatedAt", basic.get("createdAt"))
+            edited_tag = " (edited)" if edited else ""
+            if len(body_text) > 500:
+                print_section(f"BODY{edited_tag} (first 500 chars)")
+                print(body_text[:500] + "...")
+                was_truncated = True
+            else:
+                print_section(f"BODY{edited_tag}")
+                print(body_text)
+
+    # Comments
     if basic.get("comments"):
-        print_section(f"COMMENTS ({len(basic['comments'])} total)")
-        for comment in basic["comments"][-3:]:  # Last 3 comments
-            author = comment["author"]["login"]
-            date = format_date(comment["createdAt"])
-            preview = comment["body"][:100].replace("\n", " ")
-            if len(comment["body"]) > 100:
-                preview += "..."
-            print(f"  [{date}] @{author}: {preview}")
-        if len(basic["comments"]) > 3:
-            print(f"  ... and {len(basic['comments']) - 3} earlier comments")
+        comments = basic["comments"]
+        if full or version is not None:
+            print_section(f"COMMENTS ({len(comments)} total)")
+            for i, comment in enumerate(comments):
+                author = comment["author"]["login"]
+                date = format_date(comment["createdAt"])
+                c_total = 0
+                c_text = comment["body"]
+
+                if edit_versions:
+                    c_total = edit_versions["comment_edit_counts"].get(i, 0)
+                    c_versions = edit_versions["comment_versions"].get(i, [])
+                    if version is not None and c_versions:
+                        if version <= len(c_versions):
+                            c_text = c_versions[version - 1]
+                            c_ver = version
+                        else:
+                            c_ver = c_total  # version beyond this comment's edits, show latest
+                    else:
+                        c_ver = c_total
+
+                ver_label = f" (version {c_ver}/{c_total})" if c_total > 1 else ""
+                print(f"  --- Comment {i+1}/{len(comments)} [{date}] @{author}{ver_label} ---")
+                print(c_text)
+                print()
+        else:
+            print_section(f"COMMENTS ({len(comments)} total)")
+            for comment in comments[-3:]:  # Last 3 comments
+                author = comment["author"]["login"]
+                date = format_date(comment["createdAt"])
+                edited = comment.get("createdAt") != comment.get("updatedAt", comment.get("createdAt"))
+                edited_tag = " (edited)" if edited else ""
+                preview = comment["body"][:100].replace("\n", " ")
+                if len(comment["body"]) > 100:
+                    preview += "..."
+                    was_truncated = True
+                print(f"  [{date}] @{author}{edited_tag}: {preview}")
+            if len(comments) > 3:
+                print(f"  ... and {len(comments) - 3} earlier comments")
+                was_truncated = True
+
+    if was_truncated and not full:
+        print(f"  Tip: use --full to see complete body and all comments")
 
     print()
 
 
+def ensure_utf8_stdout():
+    """Ensure stdout can handle UTF-8 text regardless of terminal settings."""
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
+
 def main():
     global SYMBOLS
+
+    # Always ensure UTF-8 output for body/comment text (may contain math symbols)
+    ensure_utf8_stdout()
 
     parser = argparse.ArgumentParser(
         description="Display full GitHub issue context including timeline, cross-references, and sub-issues"
@@ -394,6 +547,9 @@ def main():
     parser.add_argument("issue", type=int, help="Issue number")
     parser.add_argument("--repo", "-r", type=str, help="Repository in owner/name format (default: auto-detect from current directory)")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
+    parser.add_argument("--full", "-f", action="store_true", help="Show complete body and all comments without truncation")
+    parser.add_argument("--edit", "-e", type=int, default=None, metavar="N",
+                        help="View a specific edit version (1=original, omit for latest). Implies --full.")
     parser.add_argument("--compact", action="store_true", help="Compact output (skip body, label history, renames)")
     parser.add_argument("--ascii", action="store_true", help="Use ASCII symbols instead of Unicode/emoji (auto-detected if output is piped)")
 
@@ -402,7 +558,12 @@ def main():
     # Initialize symbol set based on terminal capabilities
     SYMBOLS = detect_utf8_support(force_ascii=args.ascii)
 
-    display_issue(args.issue, repo=args.repo, output_json=args.json, compact=args.compact)
+    # --edit implies --full
+    if args.edit is not None:
+        args.full = True
+
+    display_issue(args.issue, repo=args.repo, output_json=args.json,
+                  compact=args.compact, full=args.full, version=args.edit)
 
 
 if __name__ == "__main__":

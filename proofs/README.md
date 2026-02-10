@@ -72,6 +72,14 @@ Triangular number theory and the stf (trisum) function.
 - `weighted_power_sum_reverse` — Weighted power sum flip: Σ_{i<z} i·b^(z-1-i) = Σ_{i<z} (z-1-i)·b^i. Follows `power_sum_reverse` pattern via `sum_congr` + `omega` + `sum_flip`. No hypotheses needed.
 - `rowValue'_closed_form` — **Per-row closed form**: (b-1)² · rv'(b,z) + (b-tri z)·(b-1) + (z-1)·(b-1) + b = (b-tri z)·(b-1)·b^z + b^z. Direct assembly from existing building blocks: `rowValue'_split` decomposes, `power_sum_reverse` + `weighted_power_sum_reverse` flip to ascending, `geom_sum_pred_mul_add_one` + `weighted_sum_closed` provide closed forms, `ring` pre-factors opaque atoms, `omega` closes. No induction or ℤ-casting needed. Requires `hb : 2 ≤ b`, `hz : 1 ≤ z`.
 
+*Phase 1 — Sqrt discriminant, qg inverse, and stf' at triangular bases:*
+- `triangular_discriminant_sq` — Discriminant identity: 1 + 8·tri(r) = (2r+1)². Standalone reusable form of the algebraic identity used internally by `tri_is_triangular`. Via `two_mul_tri` + `ring`.
+- `sqrt_triangular_discriminant` — Nat.sqrt(1 + 8·tri(r)) = 2r+1. Immediate from `triangular_discriminant_sq` + `Nat.sqrt_eq'`.
+- `sqrt_triangular_discriminant_real` — Real.sqrt(↑(1 + 8·tri(r))) = ↑(2r+1). Bridge to ℝ via `push_cast` + `Real.sqrt_sq (by positivity)`. Requires `import Mathlib.Data.Real.Sqrt`.
+- `qg_of_tri` — Left inverse: qg(tri(r)) = r for all r. Proves qg is a left inverse of tri.
+- `tri_le_tri` — Monotonicity: z ≤ r → tri(z) ≤ tri(r). Via `Nat.div_le_div_right` + `Nat.mul_le_mul`.
+- `stf'_at_tri` — **Specialized closed form at triangular bases**: At b = tri(r), the two bt-dependent terms in `stf'_closed_form` vanish (bt = 0). Foundation for Conjecture 5 divisibility analysis. Applies `stf'_closed_form`, rewrites via `qg_of_tri`, eliminates zeros, closes with `linarith`. Requires `hr : 2 ≤ r`.
+
 *Step 4F — Full stf(b) = F(b) closed form:*
 - `stf'_closed_form` — **Full stf closed form**: 6·(b-1)⁴·stf'(b) + LHS correction terms = RHS closed-form terms. Capstone theorem that eliminates all Finset.sum from stf'(b) by combining the telescoping identity (`stf'_telescope`) with closed forms for the boundary sum (`boundary_sum_closed`, 4A), correction sum (`correction_sum_closed`, 4C), and per-row value (`rowValue'_closed_form`, 4E). Uses `zify` to cast from Nat to ℤ, then `linear_combination` with exact polynomial coefficients (-6·(b-1)³·hT - (b-1)³·hB + 6·hC_dist + 6·b·(b-1)·hRV) to close the nonlinear identity. Requires `hb : 2 ≤ b`, `hqg_pos : 1 ≤ qg b`, `hvalid : ∀ z, z < qg b → tri (z + 1) ≤ b`.
 
@@ -109,6 +117,13 @@ rowValue'_split + power_sum_reverse + weighted_power_sum_reverse
 
 stf'_telescope + boundary_sum_closed + correction_sum_closed + rowValue'_closed_form
     → stf'_closed_form (Step 4F, zify + linear_combination over ℤ)
+
+two_mul_tri → triangular_discriminant_sq → sqrt_triangular_discriminant
+    → sqrt_triangular_discriminant_real (Real.sqrt bridge)
+    → qg_of_tri (left inverse of tri)
+        + tri_le_tri (monotonicity)
+        + stf'_closed_form
+        → stf'_at_tri (Phase 1, specialized closed form at b = tri(r))
 ```
 
 *Critical path to stf(b) = F(b) closed form:*
@@ -122,10 +137,11 @@ The theorems below are on the direct path to proving `F(primesum(k₁,p₁)) = p
 | **Algebraic stf** | `stf_eq_stf'`, `stf'_telescope` |
 | **Closed forms** | `boundary_sum_closed` (4A), `arith_geom_sum` (4B), `correction_sum_closed` (4C), `weighted_sum_closed` (4D), `rowValue'_closed_form` (4E) |
 | **Assembly** | `stf'_closed_form` (4F) — combines telescope + 4A + 4C + 4E via `zify` + `linear_combination` |
+| **Specialization** | `stf'_at_tri` (Phase 1) — bt=0 specialization at triangular bases, foundation for Conjecture 5 |
 
-Supporting theorems (used by the critical path but not on it directly): `six_mul_tri`, `boundary_step`, `geom_sum_pred_mul_add_one`, `weighted_sum_split`, `weighted_power_sum_reverse`, `rowValue'_split`, `rowValue'_succ_add`, `geom_sum_mul_add_one`, `power_sum_reverse`, `sum_rowValue'_succ_eq`, `rowValue'_sum_index_shift`, `correction_sum_intermediate`, `weighted_sum_closed`.
+Supporting theorems (used by the critical path but not on it directly): `six_mul_tri`, `boundary_step`, `geom_sum_pred_mul_add_one`, `weighted_sum_split`, `weighted_power_sum_reverse`, `rowValue'_split`, `rowValue'_succ_add`, `geom_sum_mul_add_one`, `power_sum_reverse`, `sum_rowValue'_succ_eq`, `rowValue'_sum_index_shift`, `correction_sum_intermediate`, `weighted_sum_closed`, `triangular_discriminant_sq`, `sqrt_triangular_discriminant`, `qg_of_tri`, `tri_le_tri`.
 
-Not on the F(b) path: `power_sum_closed` (proved but bypassed by Nat-safe approach), `tri_is_triangular` / `tri_tri_is_triangular` (used by Core.lean bridge, not F(b)), concrete evaluations (`tri_two`, `tri_four`, etc.).
+Not on the F(b) path: `power_sum_closed` (proved but bypassed by Nat-safe approach), `tri_is_triangular` / `tri_tri_is_triangular` (used by Core.lean bridge, not F(b)), `sqrt_triangular_discriminant_real` (Real.sqrt bridge, informational), concrete evaluations (`tri_two`, `tri_four`, etc.).
 
 **All theorems fully machine-verified** (zero `sorry`).
 

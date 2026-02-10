@@ -28,6 +28,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Nat.Digits.Lemmas
 import Mathlib.Algebra.Ring.GeomSum
+import Mathlib.Data.Real.Sqrt
 import Digits
 
 -- ============================================================
@@ -136,6 +137,27 @@ theorem tri_is_triangular (n : Nat) : isTriangular (tri n) = true := by
   -- Need: (2n+1)*(2n+1) == (2n+1)^2 && (2n+1-1) % 2 == 0
   simp [Nat.pow_two]
 
+-- The triangular discriminant: 1 + 8*tri(r) is the perfect square (2r+1)².
+-- Extracted from tri_is_triangular for standalone use.
+theorem triangular_discriminant_sq (r : Nat) :
+    1 + 8 * tri r = (2 * r + 1) ^ 2 := by
+  have h := two_mul_tri r  -- 2 * tri r = r * (r + 1)
+  have h2 : 8 * tri r = 4 * (2 * tri r) := by ring
+  rw [h2, h]; ring
+
+-- Nat.sqrt of the triangular discriminant.
+theorem sqrt_triangular_discriminant (r : Nat) :
+    Nat.sqrt (1 + 8 * tri r) = 2 * r + 1 := by
+  rw [triangular_discriminant_sq, Nat.sqrt_eq']
+
+-- Real.sqrt of the triangular discriminant.
+-- Bridges Nat and ℝ: √(1 + 8·tri(r)) = 2r+1 in ℝ.
+theorem sqrt_triangular_discriminant_real (r : Nat) :
+    Real.sqrt (↑(1 + 8 * tri r) : ℝ) = ↑(2 * r + 1) := by
+  rw [triangular_discriminant_sq]
+  push_cast
+  exact Real.sqrt_sq (by positivity)
+
 -- ============================================================
 -- PART 4: The stf Function (Sum of Triangular Digit Rows)
 -- ============================================================
@@ -150,6 +172,13 @@ def digitsToNat (b : Nat) (digits : List Nat) : Nat :=
     For triangular b, returns the unique r with r*(r+1)/2 = b. -/
 def qg (b : Nat) : Nat :=
   (Nat.sqrt (1 + 8 * b) - 1) / 2
+
+-- qg is a left inverse of tri: qg(tri(r)) = r for all r.
+theorem qg_of_tri (r : Nat) : qg (tri r) = r := by
+  unfold qg
+  rw [sqrt_triangular_discriminant]
+  -- Goal: (2 * r + 1 - 1) / 2 = r
+  omega
 
 /-- rowValue: the triangular factor (tf) — value of row z in the triangular
     digit arrangement. Row z has z consecutive digits starting at (b - tri(z)),
@@ -1113,6 +1142,53 @@ theorem stf'_closed_form_3 :
     + 6 * 3
     + 6 * (3 - tri 2) * 2 ^ 2 * 3 ^ 3
     + 6 * 2 * 3 ^ 3 := by native_decide
+
+-- === Phase 1: stf'_closed_form specialized at triangular bases ===
+
+-- Helper: tri is monotone (z ≤ r → tri z ≤ tri r).
+theorem tri_le_tri (h : z ≤ r) : tri z ≤ tri r := by
+  unfold tri
+  apply Nat.div_le_div_right
+  apply Nat.mul_le_mul (by omega) (by omega)
+
+-- Specialization of stf'_closed_form at b = tri(r).
+-- At triangular bases, bt = b - tri(qg(b)) = 0, so the two bt-dependent
+-- terms vanish, giving a cleaner identity involving only tri(r) and r.
+theorem stf'_at_tri (r : Nat) (hr : 2 ≤ r) :
+    6 * (tri r - 1) ^ 4 * stf' (tri r)
+    + 6 * r * tri r * (tri r - 1) ^ 3
+    + 6 * (tri r - 1) ^ 2 * tri r
+    + 6 * (r + 1) * tri r ^ (r + 1)
+    + 6 * tri r * (r - 1) * (tri r - 1) ^ 2
+    + 6 * tri r ^ 2 * (tri r - 1)
+    =
+    (tri r - 1) ^ 3 * r * (r - 1) * (r - 2)
+    + 6 * r * tri r ^ (r + 2)
+    + 6 * tri r
+    + 6 * (tri r - 1) * tri r ^ (r + 1) := by
+  -- Discharge hypotheses for stf'_closed_form
+  have hb : 2 ≤ tri r := by
+    have h1 : 2 ≤ tri 2 := by native_decide
+    exact Nat.le_trans h1 (tri_le_tri hr)
+  have hqg := qg_of_tri r
+  have hqg_pos : 1 ≤ qg (tri r) := by rw [hqg]; omega
+  have hvalid : ∀ z, z < qg (tri r) → tri (z + 1) ≤ tri r := by
+    intro z hz; rw [hqg] at hz; exact tri_le_tri (by omega)
+  -- Apply the general closed form
+  have hcf := stf'_closed_form (tri r) hb hvalid hqg_pos
+  -- Rewrite qg(tri r) → r and tri r - tri r → 0 everywhere
+  rw [hqg] at hcf
+  simp only [Nat.sub_self, Nat.zero_mul, Nat.mul_zero] at hcf
+  -- The simplified identity matches our goal
+  linarith
+
+-- Bounded verification of stf'_at_tri
+theorem stf'_at_tri_10 :
+    6 * 9 ^ 4 * stf' 10
+    + 6 * 4 * 10 * 9 ^ 3 + 6 * 9 ^ 2 * 10 + 6 * 5 * 10 ^ 5
+    + 6 * 10 * 3 * 9 ^ 2 + 6 * 100 * 9
+    = 9 ^ 3 * 4 * 3 * 2 + 6 * 4 * 10 ^ 6 + 6 * 10
+    + 6 * 9 * 10 ^ 5 := by native_decide
 
 -- ============================================================
 -- PART 5: Bounded Recast Pattern

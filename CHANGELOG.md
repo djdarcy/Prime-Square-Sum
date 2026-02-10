@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.22] - 2026-02-10
+
+### Added
+- **Phase 1: Sqrt discriminant, qg inverse, and stf' at triangular bases** in TriSum.lean
+  - `triangular_discriminant_sq` — Discriminant identity: 1 + 8·tri(r) = (2r+1)². Extracts the algebraic identity from `tri_is_triangular` into a standalone reusable theorem. Proved via `two_mul_tri` + `ring`.
+  - `sqrt_triangular_discriminant` — Nat.sqrt identity: Nat.sqrt(1 + 8·tri(r)) = 2r+1. Immediate from `triangular_discriminant_sq` + `Nat.sqrt_eq'`.
+  - `sqrt_triangular_discriminant_real` — Real.sqrt identity: Real.sqrt(↑(1 + 8·tri(r))) = ↑(2r+1). Bridges to ℝ via `push_cast` + `Real.sqrt_sq (by positivity)`. Requires `import Mathlib.Data.Real.Sqrt` (+440 build jobs).
+  - `qg_of_tri` — Left inverse: qg(tri(r)) = r. Proves qg is a left inverse of tri. Unfold + rewrite sqrt + omega.
+  - `tri_le_tri` — Monotonicity: z ≤ r → tri(z) ≤ tri(r). Via `Nat.div_le_div_right` + `Nat.mul_le_mul`.
+  - `stf'_at_tri` — **Specialized closed form at triangular bases**: When b = tri(r), bt = b - tri(qg(b)) = 0, and the two bt-dependent terms in `stf'_closed_form` vanish. Applies `stf'_closed_form`, rewrites via `qg_of_tri`, eliminates zeros with `simp only [Nat.sub_self, Nat.zero_mul, Nat.mul_zero]`, closes with `linarith`. Foundation for Conjecture 5 proof (extra factor of 6 when r = k²).
+  - `stf'_at_tri_10` — Bounded verification for b = tri(4) = 10 via `native_decide`.
+- Python verification script:
+  - `tests/one-offs/thinking/2026-02-10__phase1-sqrt-discriminant-verify.py` — 5-category verification: discriminant identity (r=0..50), Nat.sqrt identity (r=0..50), qg inverse (r=0..50), stf'_closed_form at triangular bases with bt=0 (r=2..14), simplified identity form
+
+### Changed
+- **`scripts/gh_issue_full.py`** — Edit history and full-view capabilities
+  - `--full` (`-f`) flag: show complete untruncated body and all comments
+  - `--edit N` (`-e N`) flag: view specific historical versions of issue body and comments via GitHub GraphQL `userContentEdits` API (1=original, omit for latest). Implies `--full`. Applies to both body and comments — gracefully falls back to latest when a comment has fewer versions than requested.
+  - `(edited)` indicator in default mode when body or comments have been modified (via `updatedAt` comparison)
+  - `(version X/Y)` indicators in `--full` mode showing edit version counts per body/comment
+  - Truncation hint (`Tip: use --full to see complete body and all comments`) when default mode cuts content short
+  - UTF-8 encoding fix: `ensure_utf8_stdout()` for math symbols (Σ, etc.) on Windows terminals regardless of codepage
+
+### Design Documents
+- `2026-02-10__03-30-12__dev-workflow_phase1-sqrt-discriminant-and-variant-roadmap.md` — Phase 1 implementation analysis with 4-solution evaluation (A: Phase 1 only, B: skip to Conjecture 5, C: Phase 1 + qg + bt=0 specialization [chosen], D: Nat-only), PUVM summary, and variant roadmap
+- `2026-02-10__04-22-XX__MATH-PHASE-2_current-overview.txt` — Phase 1 coverage mapping to issue #56, proof phases status, and Conjecture 5 roadmap via stf'_at_tri bridge
+- `2026-02-09__02-01-XX__What-Do-These-Proofs-Get-Us.txt` — Strategic analysis: closed-form F(b) as constraint equation F(primesum(k₁,p₁)) = primesum(k₂,p₂), connection to Conjecture 5 divisibility and pure-center Pascal Row 4 structure
+
 ## [0.7.21] - 2026-02-08/09
 
 ### Added
