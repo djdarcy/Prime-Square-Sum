@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [0.7.21] - 2026-02-08/09
 
 ### Added
+- **Step 4F: Full stf(b) = F(b) closed form** in TriSum.lean
+  - `stf'_closed_form` — **Full stf closed form**: 6·(b-1)⁴·stf'(b) + [6 additive correction terms] = (b-1)³·r·(r-1)·(r-2) + 6·r·b^(r+2) + 6·b + 6·(b-tri r)·(b-1)²·b^(r+1) + 6·(b-1)·b^(r+1). Capstone theorem combining all building blocks (4A boundary, 4C correction, 4E per-row) via the telescoping identity to eliminate all Finset.sum from stf'(b). Uses `zify` to cast to ℤ and `linear_combination` with exact polynomial coefficients to close the nonlinear identity. First use of `zify` + `linear_combination` in this codebase. Requires `hb : 2 ≤ b`, `hqg_pos : 1 ≤ qg b`, and `hvalid : ∀ z, z < qg b → tri (z + 1) ≤ b`.
+  - Bounded `native_decide` verifications for b=10 (r=4), b=6 (r=3), b=3 (r=2)
 - **Step 4E: Per-row closed form (rowValue' assembly)** in TriSum.lean
   - `weighted_power_sum_reverse` — Weighted power sum flip: Σ_{i<z} i·b^(z-1-i) = Σ_{i<z} (z-1-i)·b^i. Follows `power_sum_reverse` pattern via `sum_congr` + `omega` + `sum_flip`. No hypotheses needed.
   - `rowValue'_closed_form` — **Per-row closed form**: (b-1)² · rv'(b,z) + (b-tri z)·(b-1) + (z-1)·(b-1) + b = (b-tri z)·(b-1)·b^z + b^z. Nat-safe additive identity for the per-row value. Direct assembly from existing building blocks — no induction or ℤ-casting needed. Decomposes via `rowValue'_split`, flips via `power_sum_reverse` + `weighted_power_sum_reverse`, substitutes `geom_sum_pred_mul_add_one` + `weighted_sum_closed`, then `omega` closes over opaque atoms with intermediate `ring` factoring. Requires `hb : 2 ≤ b`, `hz : 1 ≤ z`.
@@ -29,6 +32,7 @@ All notable changes to this project will be documented in this file.
   - Bounded `native_decide` verifications for b = 6, 10, 15
 - **Critical path classification** in proofs/README.md — Added table showing which theorems are on the direct path to F(primesum(k₁,p₁)) = primesum(k₂,p₂), with Foundation/Bridge/Algebraic stf/Closed forms/Assembly tiers and supporting/informational categories
 - Python verification scripts:
+  - `tests/one-offs/thinking/2026-02-09__step4f-stf-closed-form-verify.py` — Step 4F full stf closed form verification (6 categories: telescoping identity, rearranged form, Nat-safe identity for b=3..49, triangular base simplification, extractable stf' value, step-by-step proof chain for b=10)
   - `tests/one-offs/thinking/2026-02-09__step4e-per-row-closed-form.py` — Step 4E identity verification (5 categories: Nat-safe identity, N(b,z) polynomial cross-check, weighted reverse, decomposition chain, concrete values)
   - `tests/one-offs/thinking/2026-02-09__step4e-approach-derivation.py` — Step 4E approach exploration: N(b,z) polynomial, Nat-safe sign separation, building-block assembly derivation, concrete proof chain walkthrough
   - `tests/one-offs/thinking/2026-02-09__step4d-building-block-chain-verify.py` — Step 4D building block chain: hsplit/hfactor/hkey/hag/hgeom combination verification
@@ -50,6 +54,7 @@ All notable changes to this project will be documented in this file.
 - `2026-02-09__10-43-35__dev-workflow_step4d-last-row-rv-closed-form.md` — Step 4D implementation planning
 - `2026-02-09__13-47-28__dev-workflow_step4e-assessment-and-next-steps.md` — Step 4E assessment, triangular primesum chain conjecture (falsified), core theorem classification
 - `2026-02-09__16-57-43__full-postmortem_step4e-per-row-closed-form.md` — Step 4E postmortem
+- `2026-02-09__18-09-10__dev-workflow_step4f-full-stf-closed-form.md` — Step 4F implementation planning and linear_combination strategy
 
 ## [0.7.20] - 2026-02-08
 

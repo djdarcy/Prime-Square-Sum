@@ -21,6 +21,8 @@
 
 import Mathlib.Data.Nat.Sqrt
 import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Zify
+import Mathlib.Tactic.LinearCombination
 import Mathlib.Algebra.Ring.Parity
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.BigOperators.Ring.Finset
@@ -982,6 +984,135 @@ theorem rowValue'_closed_form_6_3 :
 theorem rowValue'_closed_form_15_5 :
     (15 - 1) ^ 2 * rowValue' 15 5 + (15 - tri 5) * (15 - 1) + 4 * (15 - 1) + 15 =
     (15 - tri 5) * (15 - 1) * 15 ^ 5 + 15 ^ 5 := by native_decide
+
+-- ============================================================
+-- Step 4F: Full stf Closed Form
+-- ============================================================
+-- The full closed form for stf'(b) as a single expression.
+-- Combines the telescoping identity with the closed forms for B (4A),
+-- C (4C), and rv' (4E) to eliminate all Finset.sum from stf'(b).
+--
+-- Identity (Nat-safe additive form):
+--   6*(b-1)^4 * stf'(b) + 6*r*b*(b-1)^3 + 6*(b-1)^2*tri(r)
+--     + 6*(r+1)*b^(r+1) + 6*b*(b-tri r)*(b-1)^2
+--     + 6*b*(r-1)*(b-1)^2 + 6*b^2*(b-1)
+--   = (b-1)^3*r*(r-1)*(r-2) + 6*r*b^(r+2) + 6*b
+--     + 6*(b-tri r)*(b-1)^2*b^(r+1) + 6*(b-1)*b^(r+1)
+--
+-- where r = qg(b). This determines stf'(b) uniquely given b and r.
+--
+-- Proof: multiply the telescoping by 6*(b-1)^3, then substitute
+-- boundary_sum_closed (×(b-1)^3), correction_sum_closed (×6),
+-- and rowValue'_closed_form (×6*(b-1)*b). omega closes.
+
+/-- Full stf closed form (Nat-safe additive identity).
+    Combines the telescoping theorem with all component closed forms
+    (boundary sum 4A, correction sum 4C, per-row 4E) to express
+    stf'(b) purely in terms of b and r = qg(b) with no remaining
+    Finset.sum. The scaling factor 6*(b-1)^4 absorbs the denominators
+    from all component identities. -/
+theorem stf'_closed_form (b : Nat) (hb : 2 ≤ b)
+    (hvalid : ∀ z, z < qg b → tri (z + 1) ≤ b)
+    (hqg_pos : 1 ≤ qg b) :
+    6 * (b - 1) ^ 4 * stf' b
+    + 6 * qg b * b * (b - 1) ^ 3
+    + 6 * (b - 1) ^ 2 * tri (qg b)
+    + 6 * (qg b + 1) * b ^ (qg b + 1)
+    + 6 * b * (b - tri (qg b)) * (b - 1) ^ 2
+    + 6 * b * (qg b - 1) * (b - 1) ^ 2
+    + 6 * b ^ 2 * (b - 1)
+    =
+    (b - 1) ^ 3 * qg b * (qg b - 1) * (qg b - 2)
+    + 6 * qg b * b ^ (qg b + 2)
+    + 6 * b
+    + 6 * (b - tri (qg b)) * (b - 1) ^ 2 * b ^ (qg b + 1)
+    + 6 * (b - 1) * b ^ (qg b + 1) := by
+  set r := qg b with hr_def
+  -- Get the four building blocks
+  have hT := stf'_telescope b hvalid
+  have hB := boundary_sum_closed b r (fun z hz => by
+    have h := hvalid z hz; rw [tri_succ] at h; omega)
+  have hC := correction_sum_closed b r (by omega)
+  have hRV := rowValue'_closed_form b r hb hqg_pos
+  -- Distribute (b-1)^2*((b-1)*C + tri r) in hC to get separated form
+  have hC_dist : (b - 1) ^ 3 *
+      (Finset.range r).sum (fun z =>
+        (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) +
+      (b - 1) ^ 2 * tri r + (r + 1) * b ^ (r + 1) =
+      r * b ^ (r + 2) + b := by
+    have hdist : (b - 1) ^ 2 *
+        ((b - 1) * (Finset.range r).sum (fun z =>
+          (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) + tri r) =
+        (b - 1) ^ 3 * (Finset.range r).sum (fun z =>
+          (z + 1) * (Finset.range (z + 1)).sum (fun i => b ^ i)) +
+        (b - 1) ^ 2 * tri r := by
+      cases b with | zero => omega | succ c => ring
+    linarith [hC, hdist]
+  -- Provide subtraction hypotheses for zify
+  have hb1 : 1 ≤ b := by omega
+  have htri_le : tri r ≤ b := by
+    have h := hvalid (r - 1) (by omega)
+    have : r - 1 + 1 = r := by omega
+    rw [this] at h; exact h
+  -- Cast to ℤ where linear_combination works.
+  -- zify converts Nat subtraction ↑(a-b) → ↑a - ↑b using the provided hypotheses.
+  -- ↑(r-2) stays opaque (no 2≤r hyp) but appears consistently in goal and hB.
+  zify [hb1, htri_le, hqg_pos] at hT hB hC_dist hRV ⊢
+  -- The goal follows from the linear combination:
+  --   -6*(b-1)^3 * hT - (b-1)^3 * hB + 6 * hC_dist + 6*b*(b-1) * hRV
+  -- All Finset.sum variables (stf', B, C, rv') cancel exactly, leaving
+  -- only closed-form terms in b, r that ring verifies.
+  linear_combination
+    -6 * ((b : ℤ) - 1) ^ 3 * hT
+    - ((b : ℤ) - 1) ^ 3 * hB
+    + 6 * hC_dist
+    + 6 * (b : ℤ) * ((b : ℤ) - 1) * hRV
+
+-- Bounded verifications of stf' closed form
+theorem stf'_closed_form_10 :
+    6 * 9 ^ 4 * stf' 10
+    + 6 * 4 * 10 * 9 ^ 3
+    + 6 * 9 ^ 2 * tri 4
+    + 6 * 5 * 10 ^ 5
+    + 6 * 10 * (10 - tri 4) * 9 ^ 2
+    + 6 * 10 * 3 * 9 ^ 2
+    + 6 * 100 * 9
+    =
+    9 ^ 3 * 4 * 3 * 2
+    + 6 * 4 * 10 ^ 6
+    + 6 * 10
+    + 6 * (10 - tri 4) * 9 ^ 2 * 10 ^ 5
+    + 6 * 9 * 10 ^ 5 := by native_decide
+
+theorem stf'_closed_form_6 :
+    6 * 5 ^ 4 * stf' 6
+    + 6 * 3 * 6 * 5 ^ 3
+    + 6 * 5 ^ 2 * tri 3
+    + 6 * 4 * 6 ^ 4
+    + 6 * 6 * (6 - tri 3) * 5 ^ 2
+    + 6 * 6 * 2 * 5 ^ 2
+    + 6 * 36 * 5
+    =
+    5 ^ 3 * 3 * 2 * 1
+    + 6 * 3 * 6 ^ 5
+    + 6 * 6
+    + 6 * (6 - tri 3) * 5 ^ 2 * 6 ^ 4
+    + 6 * 5 * 6 ^ 4 := by native_decide
+
+theorem stf'_closed_form_3 :
+    6 * 2 ^ 4 * stf' 3
+    + 6 * 2 * 3 * 2 ^ 3
+    + 6 * 2 ^ 2 * tri 2
+    + 6 * 3 * 3 ^ 3
+    + 6 * 3 * (3 - tri 2) * 2 ^ 2
+    + 6 * 3 * 1 * 2 ^ 2
+    + 6 * 9 * 2
+    =
+    2 ^ 3 * 2 * 1 * 0
+    + 6 * 2 * 3 ^ 4
+    + 6 * 3
+    + 6 * (3 - tri 2) * 2 ^ 2 * 3 ^ 3
+    + 6 * 2 * 3 ^ 3 := by native_decide
 
 -- ============================================================
 -- PART 5: Bounded Recast Pattern

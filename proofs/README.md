@@ -72,6 +72,9 @@ Triangular number theory and the stf (trisum) function.
 - `weighted_power_sum_reverse` — Weighted power sum flip: Σ_{i<z} i·b^(z-1-i) = Σ_{i<z} (z-1-i)·b^i. Follows `power_sum_reverse` pattern via `sum_congr` + `omega` + `sum_flip`. No hypotheses needed.
 - `rowValue'_closed_form` — **Per-row closed form**: (b-1)² · rv'(b,z) + (b-tri z)·(b-1) + (z-1)·(b-1) + b = (b-tri z)·(b-1)·b^z + b^z. Direct assembly from existing building blocks: `rowValue'_split` decomposes, `power_sum_reverse` + `weighted_power_sum_reverse` flip to ascending, `geom_sum_pred_mul_add_one` + `weighted_sum_closed` provide closed forms, `ring` pre-factors opaque atoms, `omega` closes. No induction or ℤ-casting needed. Requires `hb : 2 ≤ b`, `hz : 1 ≤ z`.
 
+*Step 4F — Full stf(b) = F(b) closed form:*
+- `stf'_closed_form` — **Full stf closed form**: 6·(b-1)⁴·stf'(b) + LHS correction terms = RHS closed-form terms. Capstone theorem that eliminates all Finset.sum from stf'(b) by combining the telescoping identity (`stf'_telescope`) with closed forms for the boundary sum (`boundary_sum_closed`, 4A), correction sum (`correction_sum_closed`, 4C), and per-row value (`rowValue'_closed_form`, 4E). Uses `zify` to cast from Nat to ℤ, then `linear_combination` with exact polynomial coefficients (-6·(b-1)³·hT - (b-1)³·hB + 6·hC_dist + 6·b·(b-1)·hRV) to close the nonlinear identity. Requires `hb : 2 ≤ b`, `hqg_pos : 1 ≤ qg b`, `hvalid : ∀ z, z < qg b → tri (z + 1) ≤ b`.
+
 *Bounded verification:*
 - TriSum-Recast theorem verification for n ∈ {2, 3, 4}; pattern breaks at n = 5
 - `native_decide` verifications for rowValue' equivalence, decomposition, stf bridge, recursive relation, index shift, and telescoping across bases 6, 10, 15
@@ -103,7 +106,9 @@ arith_geom_sum (arithmetic-geometric sum, Step 4B bottleneck)
 rowValue'_split + power_sum_reverse + weighted_power_sum_reverse
     + geom_sum_pred_mul_add_one + weighted_sum_closed
     → rowValue'_closed_form (Step 4E, direct assembly)
-    → [future] full stf = F(b) (Step 4F, combines 4A + 4B + 4C + 4D via telescoping)
+
+stf'_telescope + boundary_sum_closed + correction_sum_closed + rowValue'_closed_form
+    → stf'_closed_form (Step 4F, zify + linear_combination over ℤ)
 ```
 
 *Critical path to stf(b) = F(b) closed form:*
@@ -116,9 +121,9 @@ The theorems below are on the direct path to proving `F(primesum(k₁,p₁)) = p
 | **Bridge** | `rowValue_eq_rowValue'` (algorithmic → algebraic) |
 | **Algebraic stf** | `stf_eq_stf'`, `stf'_telescope` |
 | **Closed forms** | `boundary_sum_closed` (4A), `arith_geom_sum` (4B), `correction_sum_closed` (4C), `weighted_sum_closed` (4D), `rowValue'_closed_form` (4E) |
-| **Assembly** | [Step 4F — combines 4A + 4B + 4C + 4D + 4E via telescoping] |
+| **Assembly** | `stf'_closed_form` (4F) — combines telescope + 4A + 4C + 4E via `zify` + `linear_combination` |
 
-Supporting theorems (used by the critical path but not on it directly): `six_mul_tri`, `boundary_step`, `geom_sum_pred_mul_add_one`, `weighted_sum_split`, `weighted_power_sum_reverse`, `rowValue'_split`, `rowValue'_succ_add`, `geom_sum_mul_add_one`, `power_sum_reverse`, `sum_rowValue'_succ_eq`, `rowValue'_sum_index_shift`, `correction_sum_intermediate`.
+Supporting theorems (used by the critical path but not on it directly): `six_mul_tri`, `boundary_step`, `geom_sum_pred_mul_add_one`, `weighted_sum_split`, `weighted_power_sum_reverse`, `rowValue'_split`, `rowValue'_succ_add`, `geom_sum_mul_add_one`, `power_sum_reverse`, `sum_rowValue'_succ_eq`, `rowValue'_sum_index_shift`, `correction_sum_intermediate`, `weighted_sum_closed`.
 
 Not on the F(b) path: `power_sum_closed` (proved but bypassed by Nat-safe approach), `tri_is_triangular` / `tri_tri_is_triangular` (used by Core.lean bridge, not F(b)), concrete evaluations (`tri_two`, `tri_four`, etc.).
 

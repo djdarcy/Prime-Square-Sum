@@ -193,14 +193,37 @@ Combined with the proven primesum(n,2) mod 6 theorem (see `proofs/`), for the id
 
 Discovered 2026-02-06 during Pascal-weighted number system exploration. The "pure center" pattern in Pascal Row 4 representations of stf values led to checking divisibility by 6, which revealed the perfect-square correlation.
 
+### Three Analytic Forms and Proof Approaches
+
+The machine-verified `stf'_closed_form` (Steps 4A–4F in `proofs/TriSum.lean`) gives rise to three distinct analytic forms of stf', each offering a different lens on Conjecture 5:
+
+**Discrete Closed Form (DCF)** — The proven Lean identity. Exact for all b ≥ 2. Uses integer exponents with explicit `bt = b - tri(r)` correction terms. Nat-safe. The conjecture in DCF terms requires manipulating the full identity with multiple opaque atoms — feasible but algebraically heavy.
+
+**Regime-Analytic Form (RAF)** — New proposal. For each integer r, define F_r(bt) by evaluating the DCF with bt ∈ ℝ (continuous fill level) while keeping r fixed. This is a rational function of bt: polynomial of degree r+2 over polynomial of degree 4. No irrational exponents. The piecewise form is smooth within each regime [tri(r), tri(r+1)) and has honest discontinuities at regime boundaries (jump = the new row's value rv'(b, r+1)).
+
+**Global-Analytic Form (GAF)** — The 2010 Mathematica FullSimplify result using `s = √(1+8b)`. A single smooth formula for all real b. Exact only at triangular bases (where √(1+8b) is integer). Between triangular bases, FullSimplify's replacement of `Floor[(s-1)/2]` with `(s-1)/2` gives incorrect values because it erases the discrete coefficient structure.
+
+**Why RAF is most promising for Conjecture 5**: From the DCF identity, `6·(b-1)⁴·stf'(b) = N`. Integrality of stf' means `6·(b-1)⁴ | N` (already proven). Conjecture 5 requires `36·(b-1)⁴ | N` — an **extra factor of 6** beyond integrality. At b = tri(k²), r = k², bt = 0, the RAF expression gives N(k) as a closed-form integer combination of terms `b^(k²+m)` with `b = tri(k²)` — no summation, no floor function, no square roots. (Note: this is not a polynomial in k, since exponents `k²+j` depend on k — it's an integer expression with structured exponential factors.) The extra factor of 6 can be proved via modular analysis: `a^n mod 2` depends only on `a mod 2`, and `a^n mod 3` cycles with period dividing φ(3) = 2, so `b mod 6` (determined by `k mod 6` — finitely many cases) controls the residues of all terms. The RAF arrives at this structured expression directly, while GAF requires first resolving irrational exponents back to integers, and DCF requires heavy Nat-arithmetic.
+
+The analogy: extending stf' via RAF (bt ∈ ℕ → ℝ, r stays ℕ) preserves the coefficient structure, while extending via GAF (r ∈ ℕ → ℝ via sqrt) erases it. This parallels how extending ℕ to ℂ via √(-1) preserves field axioms — the "right" extension preserves the structure that matters.
+
 ### Status
 
 - [x] Verified for k = 2, 3, 4, 5 (positive cases)
 - [x] Verified for 14 non-square r values (negative cases)
 - [x] Confirmed not reducible to modular arithmetic on r
 - [x] Applied to stf(666) — consistent
+- [x] DCF proven in Lean (`stf'_closed_form`, Steps 4A–4F)
+- [x] RAF numerical verification: exact at integer lattice points, boundary jumps = rv'
+- [x] GAF vs DCF comparison: agree on triangular bases, GAF wrong between them
 - [ ] Extend verification to k = 6, 7, ... (larger perfect squares)
-- [ ] Prove algebraically: why does r = k² force 6 | stf(tri(r))?
+- [ ] **Prove Conjecture 5 via RAF Phase 4B**:
+  - [ ] Substitute r=k², bt=0, b=tri(k²) into DCF identity
+  - [ ] Isolate stf'(b) = N(k) / (6·(b-1)⁴)
+  - [ ] Show 36·(b-1)⁴ | N(k) — the extra factor of 6 beyond integrality
+  - [ ] mod 2 casework on k mod 6 (exponential periodicity: a^n mod 2 depends only on a mod 2)
+  - [ ] mod 3 casework on k mod 6 (exponential periodicity: a^n mod 3 cycles with period dividing 2)
+  - [ ] Combine → 6 | stf'(tri(k²)) for all k ≥ 2
 - [ ] Investigate whether the "pure center" Row 4 representation holds for all k
 
 ### See Also
@@ -208,7 +231,12 @@ Discovered 2026-02-06 during Pascal-weighted number system exploration. The "pur
 - `tests/one-offs/thinking/2026-02-06__stf-k-squared-conjecture-test.py` — verification script
 - `tests/one-offs/thinking/2026-02-06__stf-mod6-pattern-analysis.py` — mod 6 analysis
 - `tests/one-offs/thinking/2026-02-06__stf666-constraint-check.py` — stf(666) constraint check
+- `tests/one-offs/thinking/2026-02-09__step4f-principled-continuous-extensions.py` — RAF numerical exploration
+- `tests/one-offs/thinking/2026-02-09__step4f-bt-continuous-boundary-analysis.py` — boundary jump verification
+- `tests/one-offs/thinking/2026-02-09__step4f-mathematica-vs-lean-comparison.py` — DCF vs GAF comparison
+- `tests/one-offs/thinking/2026-02-09__step4f-conjecture5-divisibility-target.py` — verification of 36·(b-1)⁴ | N equivalence
 - `proofs/primesum_mod6.lean` — formal proof of the primesum(n,2) mod 6 theorem
+- `proofs/TriSum.lean` — DCF proof (`stf'_closed_form`)
 
 ---
 
