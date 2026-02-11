@@ -14,7 +14,7 @@ python prime-square-sum.py --expr "verify primesum(7,2) == 666"
 # Output: true
 
 # Find all matches between two sequences
-python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 --max-m 1000
+python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max n:100 --max m:1000
 # Output: Found: n=7, m=36
 ```
 
@@ -51,7 +51,7 @@ An expression consists of an optional **directive** and a **comparison**:
 # Output: 666
 
 # solve - value enumeration (free variables, no comparison)
---expr "solve tri(n)" --max-n 10
+--expr "solve tri(n)" --max n:10
 # Output: n=1: 1, n=2: 3, n=3: 6, ...
 ```
 
@@ -79,7 +79,7 @@ When you omit the directive, the system auto-detects the mode:
 # Output: n=36
 
 # Implicit for_any — free variables, no comparison
---expr "tri(n)" --max-n 5
+--expr "tri(n)" --max n:5
 # Output: n=1: 1, n=2: 3, n=3: 6, n=4: 10, n=5: 15
 ```
 
@@ -101,13 +101,13 @@ The `solve` directive has three modes depending on the expression:
 
 **Value enumeration** — free variables, no comparison (tabulate values):
 ```bash
---expr "solve tri(n)" --max-n 10
+--expr "solve tri(n)" --max n:10
 # n=1: 1
 # n=2: 3
 # n=3: 6
 # ...
 
---expr "solve primesum(n,2)" --max-n 7
+--expr "solve primesum(n,2)" --max n:7
 # n=1: 4
 # n=2: 13
 # ...
@@ -122,13 +122,13 @@ Bare-term expressions (no comparison operator) with `for_any` or `solve` enumera
 
 ```bash
 # Enumerate triangular numbers
---expr "for_any tri(n)" --max-n 10
+--expr "for_any tri(n)" --max n:10
 # n=1: 1
 # n=2: 3
 # ...
 
 # Multi-variable enumeration
---expr "for_any tri(n) + tri(m)" --max-n 5 --max-m 5
+--expr "for_any tri(n) + tri(m)" --max n:5 --max m:5
 # n=1, m=1: 2
 # n=1, m=2: 4
 # ...
@@ -171,8 +171,8 @@ Full operator precedence from lowest to highest binding power:
 --expr "does_exist n**2 == 25"                          # n=5
 --expr "verify 2 + 3 * 4 == 14"                         # true (precedence)
 --expr "verify (2 + 3) * 4 == 20"                       # true (parens)
---expr "does_exist tri(n) + 1 == 11" --max-n 10         # n=4
---expr "does_exist primesum(n,2) - 1 == 665" --max-n 10 # n=7
+--expr "does_exist tri(n) + 1 == 11" --max n:10         # n=4
+--expr "does_exist primesum(n,2) - 1 == 665" --max n:10 # n=7
 ```
 
 | Operator | Operation | Example | Result |
@@ -212,7 +212,7 @@ Arithmetic expressions can be used inside function arguments:
 Logical operators with short-circuit evaluation:
 
 ```bash
---expr "does_exist n > 0 and n < 10 and tri(n) == 28" --max-n 20   # n=7
+--expr "does_exist n > 0 and n < 10 and tri(n) == 28" --max n:20   # n=7
 --expr "verify 2 > 1 and 3 > 2"                                     # true
 --expr "verify not 1 > 2"                                            # true
 ```
@@ -261,7 +261,7 @@ Comparisons can be chained, Python-style:
 
 ```bash
 --expr "verify 1 < 2 < 3"                                           # true
---expr "does_exist 1 < n < 10 and tri(n) == 28" --max-n 20          # n=7
+--expr "does_exist 1 < n < 10 and tri(n) == 28" --max n:20          # n=7
 --expr "verify 1 <= 2 < 3"                                          # true
 ```
 
@@ -348,13 +348,16 @@ Available namespaces: `pss` (tool-specific), `math` (Python math module), `user`
 Free variables (like `n`, `m`) are iterated over search ranges:
 
 ```bash
-# Set bounds for variables (legacy syntax)
---expr "for_any primesum(n,2) == tri(m)" --max-n 1000 --max-m 5000
+# Set bounds for variables
+--expr "for_any primesum(n,2) == tri(m)" --max n:1000 --max m:5000
+
+# Set minimum start value (skip early iterations)
+--expr "does_exist primesum(n,2) == stf(666)" --min n:50000000
 ```
 
-Default bounds:
-- `--max-n`: 1,000,000
-- `--max-m`: 10,000
+Default bounds (when no `--max` is specified):
+- `n`: 1,000,000
+- `m`: 10,000
 
 ### Iterator Syntax (v0.7.7+)
 
@@ -423,11 +426,11 @@ For simpler queries, you can use decomposed flags instead of `--expr`:
 --target 666
 
 # Custom left-hand side:
---lhs "tri(n)" --target 666 --max-n 100
+--lhs "tri(n)" --target 666 --max n:100
 # Finds: n=36
 
 # Different operator:
---lhs "primesum(n,2)" --operator ">=" --target 600 --max-n 10
+--lhs "primesum(n,2)" --operator ">=" --target 600 --max n:10
 # Finds first n where primesum(n,2) >= 600
 ```
 
@@ -480,7 +483,7 @@ python prime-square-sum.py --target 666 -v
 `--quiet` / `-Q` suppresses all non-error output (hints, progress, timing):
 
 ```bash
-python prime-square-sum.py --expr "solve tri(n)" --max-n 5 -Q
+python prime-square-sum.py --expr "solve tri(n)" --max n:5 -Q
 # n=1: 1
 # n=2: 3
 # ...only data on stdout, nothing else
@@ -491,7 +494,7 @@ python prime-square-sum.py --expr "solve tri(n)" --max-n 5 -Q
 `--limit N` caps the number of results for enumeration modes:
 
 ```bash
-python prime-square-sum.py --expr "for_any tri(n)" --max-n 1000 --limit 5
+python prime-square-sum.py --expr "for_any tri(n)" --max n:1000 --limit 5
 # n=1: 1
 # n=2: 3
 # n=3: 6

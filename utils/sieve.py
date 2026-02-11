@@ -111,12 +111,25 @@ def _warn_no_primesieve():
     if _primesieve_warned or os.environ.get('PRIME_SQUARE_SUM_QUIET'):
         return
     _primesieve_warned = True
-    warnings.warn(
-        "primesieve not available - using slower Python fallback.\n"
-        "  Install: pip install primesieve\n"
-        "     conda: conda install -c conda-forge python-primesieve\n"
-        "  Silence: set PRIME_SQUARE_SUM_QUIET=1"
+    # Temporarily suppress source-line echo in warnings output
+    _orig_fmt = warnings.formatwarning
+    warnings.formatwarning = (
+        lambda msg, cat, fn, ln, line=None:
+        f"{fn}:{ln}: {cat.__name__}: {msg}\n"
     )
+    try:
+        warnings.warn(
+            "primesieve not available - using slower Python fallback.\n"
+            "  Install: pip install primesieve\n"
+            "     conda: conda install -c conda-forge python-primesieve",
+            stacklevel=2,
+        )
+    finally:
+        warnings.formatwarning = _orig_fmt
+    # Show silence hint only at -v (avoids clutter for casual users)
+    from utils.output import get_output
+    out = get_output()
+    out.emit(1, "  Silence: set PRIME_SQUARE_SUM_QUIET=1", channel='config')
 
 
 def _get_available_memory_mb() -> int:

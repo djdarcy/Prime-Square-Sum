@@ -156,11 +156,12 @@ def build_bounds_from_args(args, expr_str: str) -> Dict[str, int]:
     """
     bounds = {}
 
-    # Add explicit bounds from args
-    if hasattr(args, 'max_n') and args.max_n is not None:
-        bounds['n'] = args.max_n
-    if hasattr(args, 'max_m') and args.max_m is not None:
-        bounds['m'] = args.max_m
+    # Add bounds from --max / --iter-stop
+    if hasattr(args, 'iter_stop') and args.iter_stop:
+        for spec in args.iter_stop:
+            if ':' in spec:
+                var_name, value = spec.split(':', 1)
+                bounds[var_name.strip()] = int(value.strip())
 
     # Apply defaults for missing bounds
     for var, default in DEFAULT_BOUNDS.items():
@@ -831,6 +832,56 @@ def resolve_default_equation(
     return (None, "hardcoded")
 
 
+def resolve_effective_bounds() -> Dict[str, int]:
+    """
+    Resolve the effective default bounds for display.
+
+    Uses the same precedence as runtime:
+    1. Equation-specific defaults (from default equation)
+    2. config.json "default_bounds"
+    3. Hardcoded DEFAULT_BOUNDS (lowest)
+
+    Returns DEFAULT_BOUNDS on any error, so this is always safe to call.
+    """
+    try:
+        bounds = dict(DEFAULT_BOUNDS)
+        config = load_config()
+        bounds.update(config.default_bounds)
+        equations_file = load_equations_file()
+        default_eq, _source = resolve_default_equation(equations_file, config)
+        if default_eq and default_eq.defaults:
+            bounds.update(default_eq.defaults)
+        return bounds
+    except Exception:
+        pass
+    return dict(DEFAULT_BOUNDS)
+
+
+def resolve_effective_defaults() -> ExpressionComponents:
+    """
+    Resolve the effective default expression components for display.
+
+    Uses the same three-tier precedence as runtime:
+    1. config.json "default_equation" (highest)
+    2. equations.json "default": true
+    3. Hardcoded built-in (lowest)
+
+    Returns hardcoded defaults on any error, so this is always safe to call.
+
+    Returns:
+        ExpressionComponents with the effective defaults (parameter-substituted).
+    """
+    try:
+        equations_file = load_equations_file()
+        config = load_config()
+        default_eq, _source = resolve_default_equation(equations_file, config)
+        if default_eq and default_eq.lhs:
+            return default_eq.to_components()
+    except Exception:
+        pass
+    return ExpressionComponents()
+
+
 def show_config(
     equations_file: Optional[EquationsFile] = None,
     config: Optional[Config] = None
@@ -1014,9 +1065,9 @@ def build_iterator_factories_from_args(
 
     This function bridges CLI arguments to the grammar's iterator_factories parameter.
     It handles:
-    - --var VAR:START:STOP[:STEP][:TYPE] compact syntax (new)
-    - --iter-type, --iter-start, etc. individual flags (new)
-    - --max-n, --max-m legacy bounds (backwards compat)
+    - --iter-var VAR:START:STOP[:STEP][:TYPE] compact syntax
+    - --min/--max (aliases for --iter-start/--iter-stop)
+    - --iter-type, --iter-step, etc. individual flags
 
     Args:
         args: Parsed argparse namespace
@@ -1091,7 +1142,7 @@ def build_iterator_factories_from_args(
         factories[var_name] = make_factory(iter_def)
 
     # 4. For variables in bounds but not in factories, create default factories
-    # (This maintains backwards compatibility with --max-n)
+    # (Default factories for variables with bounds but no explicit iterator)
     for var_name, max_val in bounds.items():
         if var_name not in factories:
             # Create a factory that uses the bound

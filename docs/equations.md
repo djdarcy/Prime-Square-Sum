@@ -152,7 +152,7 @@ Set default variable bounds in the equation:
 
 CLI flags override equation bounds:
 ```bash
-python prime-square-sum.py --equation tri-match --max-n 500
+python prime-square-sum.py --equation tri-match --max n:500
 ```
 
 ## Built-in Equations

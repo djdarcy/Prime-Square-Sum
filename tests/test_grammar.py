@@ -498,7 +498,7 @@ class TestFindMatches:
 
         assert "Missing bounds" in str(exc.value)
         assert "m" in str(exc.value)
-        assert "--max-m" in str(exc.value)
+        assert "--max m:VALUE" in str(exc.value)
 
     def test_no_variables_true(self, parser, evaluator):
         """Expression with no variables evaluates once."""
