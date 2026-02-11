@@ -28,6 +28,8 @@ from utils.cli import (
     Config,
     load_config,
     resolve_default_equation,
+    # Issue #63: Dynamic help text
+    resolve_effective_defaults,
     # Issue #37: Iterator definitions
     IteratorDef,
     parse_iterator_def,
@@ -188,25 +190,38 @@ class TestBuildBoundsFromArgs:
         assert bounds['m'] == DEFAULT_BOUNDS['m']
 
     def test_explicit_max_n(self):
-        """Explicit --max-n overrides default."""
-        args = Namespace(max_n=5000, max_m=None)
+        """--max n:VALUE overrides default."""
+        args = Namespace(iter_stop=['n:5000'])
         bounds = build_bounds_from_args(args, "does_exist primesum(n,2) == 666")
         assert bounds['n'] == 5000
         assert bounds['m'] == DEFAULT_BOUNDS['m']
 
     def test_explicit_max_m(self):
-        """Explicit --max-m overrides default."""
-        args = Namespace(max_n=None, max_m=500)
+        """--max m:VALUE overrides default."""
+        args = Namespace(iter_stop=['m:500'])
         bounds = build_bounds_from_args(args, "does_exist primesum(n,2) == 666")
         assert bounds['n'] == DEFAULT_BOUNDS['n']
         assert bounds['m'] == 500
 
     def test_both_explicit(self):
         """Both bounds can be explicit."""
-        args = Namespace(max_n=1000, max_m=100)
+        args = Namespace(iter_stop=['n:1000', 'm:100'])
         bounds = build_bounds_from_args(args, "for_any primesum(n,2) == tri(m)")
         assert bounds['n'] == 1000
         assert bounds['m'] == 100
+
+    def test_max_arbitrary_variable(self):
+        """--max VAR:VALUE works for variables beyond n and m."""
+        args = Namespace(iter_stop=['k:500'])
+        bounds = build_bounds_from_args(args, "does_exist f(k) == 42")
+        assert bounds['k'] == 500
+
+    def test_max_multiple(self):
+        """Multiple --max flags append correctly."""
+        args = Namespace(iter_stop=['n:5000', 'm:200'])
+        bounds = build_bounds_from_args(args, "for_any primesum(n,2) == tri(m)")
+        assert bounds['n'] == 5000
+        assert bounds['m'] == 200
 
 
 # =============================================================================
@@ -450,6 +465,90 @@ class TestResolveDefaultEquation:
         result, source = resolve_default_equation(None, config)
         assert result is None
         assert source == "hardcoded"
+
+
+class TestResolveEffectiveDefaults:
+    """Test dynamic default resolution for help text (Issue #63)."""
+
+    def test_returns_expression_components(self):
+        """Always returns an ExpressionComponents instance."""
+        result = resolve_effective_defaults()
+        assert isinstance(result, ExpressionComponents)
+        assert len(result.lhs) > 0
+        assert result.quantifier is not None
+        assert result.operator is not None
+
+    def test_stock_equations_resolves_correctly(self):
+        """With stock equations.json, resolves to primesum(n,2) components."""
+        # Stock equations.json has equation "1" as default with lhs="primesum(n,a)", a=2
+        result = resolve_effective_defaults()
+        assert result.lhs == "primesum(n,2)"
+        assert result.quantifier == "does_exist"
+        assert result.operator == "=="
+
+    def test_fallback_when_no_files(self, tmp_path, monkeypatch):
+        """Falls back to hardcoded defaults when no config files found."""
+        monkeypatch.chdir(tmp_path)
+        result = resolve_effective_defaults()
+        assert result.lhs == DEFAULTS.lhs
+        assert result.quantifier == DEFAULTS.quantifier
+        assert result.operator == DEFAULTS.operator
+
+    def test_handles_malformed_equations_gracefully(self, tmp_path, monkeypatch):
+        """Malformed equations.json doesn't crash, returns hardcoded defaults."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "equations.json").write_text("{invalid json")
+        result = resolve_effective_defaults()
+        assert result.lhs == DEFAULTS.lhs
+
+    def test_expr_and_lhs_stay_consistent(self):
+        """The LHS in components matches what would appear in a full expression."""
+        result = resolve_effective_defaults()
+        # The LHS should appear in any expression built from these components
+        result.rhs = "666"
+        expr = result.to_expression()
+        assert result.lhs in expr
+
+    def test_quantifier_matches_equations_json(self):
+        """Resolved quantifier comes from equations.json, not hardcoded."""
+        # Load the actual equations.json default and verify it matches
+        ef = load_equations_file()
+        assert ef is not None
+        default_eq = ef.get_default()
+        assert default_eq is not None
+
+        result = resolve_effective_defaults()
+        assert result.quantifier == default_eq.quantifier
+
+    def test_operator_matches_equations_json(self):
+        """Resolved operator comes from equations.json, not hardcoded."""
+        ef = load_equations_file()
+        assert ef is not None
+        default_eq = ef.get_default()
+        assert default_eq is not None
+
+        result = resolve_effective_defaults()
+        assert result.operator == default_eq.operator
+
+    def test_custom_equation_quantifier_propagates(self, tmp_path, monkeypatch):
+        """Custom equations.json with for_any default propagates to resolved defaults."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "equations.json").write_text(json.dumps({
+            "version": "1.0",
+            "equations": {
+                "1": {
+                    "name": "custom",
+                    "default": True,
+                    "lhs": "tri(n)",
+                    "operator": ">=",
+                    "quantifier": "for_any"
+                }
+            }
+        }))
+        result = resolve_effective_defaults()
+        assert result.quantifier == "for_any"
+        assert result.operator == ">="
+        assert result.lhs == "tri(n)"
 
 
 class TestAlgorithmConfig:

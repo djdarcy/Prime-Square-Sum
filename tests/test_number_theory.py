@@ -371,13 +371,21 @@ class TestTrisum:
             trisum(-1)
 
     def test_trisum_triangular_bases(self):
-        """Test trisum for triangular number bases (complete triangles)."""
-        # tri(2) = 3 digits: 0,1,2 → arranged as: 2 / 01 → 01+2 = 1+2 = 3
-        # tri(3) = 6 digits: 0,1,2,3,4,5 → arranged as: 5 / 34 / 012 → 12+34+5 = 51
+        """Test trisum for triangular number bases (complete triangles).
+
+        Row digits are evaluated as base-b numbers (Horner's method),
+        not base-10. This matters for b != 10.
+        """
+        # tri(2) = 3 digits: 0,1,2 → arranged as: 2 / 01 → (0*3+1)+(2) = 1+2 = 3
+        # tri(3) = 6 digits: 0-5 → arranged as: 5 / 34 / 012
+        #   012 in base 6 = 0*36 + 1*6 + 2 = 8
+        #   34 in base 6 = 3*6 + 4 = 22
+        #   5 in base 6 = 5
+        #   Total: 8 + 22 + 5 = 35
         # tri(4) = 10 digits: 0-9 → arranged as: 9 / 78 / 456 / 0123 → 123+456+78+9 = 666
-        assert trisum(3) == 3   # 01+2 = 1+2 = 3
-        assert trisum(6) == 51  # 012+34+5 = 12+34+5 = 51
-        assert trisum(10) == 666
+        assert trisum(3) == 3    # base-3: (0*3+1) + 2 = 3
+        assert trisum(6) == 35   # base-6: 8 + 22 + 5 = 35
+        assert trisum(10) == 666 # base-10: 123 + 456 + 78 + 9 = 666
 
 
 class TestTriangularRelationships:

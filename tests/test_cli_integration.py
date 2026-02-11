@@ -165,7 +165,7 @@ class TestFullExpression:
         """--expr returns no match for impossible value."""
         code, stdout, stderr = run_cli(
             "--expr", "does_exist primesum(n,2) == 12345",
-            "--max-n", "100"
+            "--max", "n:100"
         )
         assert code == 1  # No match returns exit code 1
         assert "No match" in stdout or "not found" in stdout.lower()
@@ -174,8 +174,8 @@ class TestFullExpression:
         """--expr with for_any finds matches."""
         code, stdout, stderr = run_cli(
             "--expr", "for_any primesum(n,2) == tri(m)",
-            "--max-n", "10",
-            "--max-m", "50"
+            "--max", "n:10",
+            "--max", "m:50"
         )
         assert code == 0
         assert "n=7" in stdout
@@ -206,7 +206,7 @@ class TestDecomposedFlags:
         code, stdout, stderr = run_cli(
             "--lhs", "tri(n)",
             "--target", "666",
-            "--max-n", "100"
+            "--max", "n:100"
         )
         assert code == 0
         assert "n=36" in stdout  # tri(36) = 666
@@ -217,7 +217,7 @@ class TestDecomposedFlags:
             "--lhs", "tri(n)",
             "--operator", ">=",
             "--target", "100",
-            "--max-n", "20"
+            "--max", "n:20"
         )
         assert code == 0
         # tri(13) = 91, tri(14) = 105
@@ -229,8 +229,8 @@ class TestDecomposedFlags:
             "--quantifier", "for_any",
             "--lhs", "tri(n)",
             "--target", "tri(m)",
-            "--max-n", "5",
-            "--max-m", "5"
+            "--max", "n:5",
+            "--max", "m:5"
         )
         assert code == 0
         # Should find matches where tri(n) == tri(m), i.e., n == m
@@ -411,7 +411,7 @@ class TestLimit:
         """--limit 3 with for_any returns at most 3 results."""
         code, stdout, stderr = run_cli(
             "--expr", "for_any tri(n)",
-            "--max-n", "100",
+            "--max", "n:100",
             "--limit", "3"
         )
         assert code == 0
@@ -422,7 +422,7 @@ class TestLimit:
         """--limit works with solve enumeration too."""
         code, stdout, stderr = run_cli(
             "--expr", "solve tri(n)",
-            "--max-n", "100",
+            "--max", "n:100",
             "--limit", "5"
         )
         assert code == 0
@@ -433,7 +433,7 @@ class TestLimit:
         """Without --limit, all matches are returned."""
         code, stdout, stderr = run_cli(
             "--expr", "for_any tri(n)",
-            "--max-n", "10"
+            "--max", "n:10"
         )
         assert code == 0
         lines = [l for l in stdout.strip().splitlines() if l.strip()]
@@ -443,7 +443,7 @@ class TestLimit:
         """--limit with does_exist shows hint to use for_any instead."""
         code, stdout, stderr = run_cli(
             "--expr", "does_exist tri(n) == 666",
-            "--max-n", "1000",
+            "--max", "n:1000",
             "--limit", "5"
         )
         assert code == 0
@@ -470,7 +470,7 @@ class TestErrorHandling:
         """Unknown function results in clear error message."""
         code, stdout, stderr = run_cli(
             "--expr", "does_exist unknown_func(n) == 666",
-            "--max-n", "10"
+            "--max", "n:10"
         )
         assert code == 1
         # Should report unknown function error, not silently fail

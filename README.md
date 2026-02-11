@@ -6,7 +6,7 @@
 
 📓 **[View the Mathematica Notebook](https://github.com/djdarcy/Prime-Square-Sum/blob/main/paper%20and%20notes/2010%20-%20Recurrence%20relation%20between%20triangular%20numbers%20and%20squared%20primes%20-%20D.%20Darcy.nb)** *(Requires [Mathematica](https://www.wolfram.com/mathematica/) or [Wolfram Player](https://www.wolfram.com/player/))*
 
-The python program is a computational platform for validating mathematical relationships. It checks LHS expressions against RHS targets and stores sequences for future analysis. The main focus of `prime-square-sum` is on summing triangular row values together (where `stf()` is an acronym for sum triangular factors) to determine if:
+The python program is a computational platform for validating mathematical relationships. It checks LHS expressions against RHS targets and stores sequences for future analysis. The main focus of `prime-square-sum` is on summing triangular row values together (where `stf()` below is an acronym for "sum triangular factors") to determine if:
 
 ![stf(b) = sum_(z=1)^qg(b) tf(b,z);](<paper and notes/function-stf-defined.png> "stf defined")
 
@@ -18,7 +18,7 @@ r = qg(b) = size of the base row of the triangular number; //qg(b) = 1/2(-1+sqrt
 z = row in the triangular number;  //ex. tf(10,4)=0123; tf(10,3)=456; tf(10,2)=78, etc.)
 ```
 
-Where `tf()`, the individual triangular row factors, are defined to be:
+Where `tf()`, the individual "triangular row factors", are defined to be:
 
 ![tf(b,z) = (-2 + 2b - 2b^2 + z - bz - z^2 + bz^2 + b^z(2 + 2b^2 + z + z^2 - b(2 + z + z^2))) / (2(-1 + b)^2)](<paper and notes/function-tf-defined.png> "tf defined")
 
@@ -41,23 +41,46 @@ Due to the huge size of the 98-digits I've further adapted `prime-square-sum` to
 ## Usage
 
 ```bash
-# Find n where sum of first n squared primes equals 666
+# Find n where sum of first n squared primes equals 666 (this is the known result: stf(10))
 python prime-square-sum.py --expr "does_exist primesum(n,2) == 666"
 # Output: Found: n=7  (because 2² + 3² + 5² + 7² + 11² + 13² + 17² = 666)
 
 # Shorthand using default expression
 python prime-square-sum.py --target 666
 ```
-
 The `--target` flag searches against the **default expression** `primesum(n,2)` (sum of squared primes). This default is defined in `equations.json` and can be customized via `config.json`. See [docs/equations.md](docs/equations.md) for details.
 
 ```bash
 # Find matches between prime sums and triangular numbers
-python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max-n 100 --max-m 50
+python prime-square-sum.py --expr "for_any primesum(n,2) == tri(m)" --max n:100 --max m:50
 
 # List available functions
 python prime-square-sum.py --list functions
 ```
+
+### The Open Question
+
+The core investigation: does the sum of triangular row factors as `stf(666)`, the 98-digit number, equal a sum of squared, cubed, or some p-th power primes?
+
+```bash
+# The main search — does stf(666) = primesum(n, 2) for some n?
+python prime-square-sum.py --expr "does_exist primesum(n,2) == trisum(666)" \
+    --algorithm sieve:primesieve --max n:1000000000
+
+# The pattern may continue at a higher power — search p = 3, 4, 5
+python prime-square-sum.py --expr "does_exist primesum(n,3) == trisum(666)" \
+    --algorithm sieve:primesieve --max n:50000000
+python prime-square-sum.py --expr "does_exist primesum(n,4) == trisum(666)" \
+    --algorithm sieve:primesieve --max n:10000000
+python prime-square-sum.py --expr "does_exist primesum(n,5) == trisum(666)" \
+    --algorithm sieve:primesieve --max n:5000000
+
+# Skip early values that are too small to match a 98-digit target
+python prime-square-sum.py --expr "does_exist primesum(n,p) == trisum(666)" \
+    --algorithm sieve:primesieve -min n:50000000 -max n:1000000000 --max p:5
+```
+
+This search requires billions of prime sums and benefits from `--algorithm sieve:primesieve` (C++ [primesieve](https://github.com/kimwalisch/primesieve) library via conda). See [Installation](#recommended-conda) for setup. The answer to this question would establish whether the chain `primesum(3,1) → stf(10) → primesum(7,2) → stf(666) → primesum(?,?)` continues — and whether it may continue indefinitely. The formal [proofs](proofs/README.md) provide the algebraic framework (closed-form `stf(b)`, verified in Lean 4), while the numerical search here would supply the concrete witness needed for induction.
 
 ### Arithmetic Expressions (v0.7.12+)
 
@@ -66,7 +89,7 @@ Use standard arithmetic operators directly in expressions:
 ```bash
 # Arithmetic in expressions
 python prime-square-sum.py --expr "does_exist n**2 == 25"                     # n=5
-python prime-square-sum.py --expr "does_exist tri(n) + 1 == 11" --max-n 10    # n=4
+python prime-square-sum.py --expr "does_exist tri(n) + 1 == 11" --max n:10    # n=4
 python prime-square-sum.py --expr "verify (2 + 3) * 4 == 20"                  # true
 
 # Operators: +  -  *  /  //  %  **  ^  (unary: -x, +x)
@@ -77,14 +100,14 @@ python prime-square-sum.py --expr "verify (2 + 3) * 4 == 20"                  # 
 
 ```bash
 # Boolean logic with short-circuit evaluation
-python prime-square-sum.py --expr "does_exist n > 0 and n < 10 and tri(n) == 28" --max-n 20
+python prime-square-sum.py --expr "does_exist n > 0 and n < 10 and tri(n) == 28" --max n:20
 
 # Bitwise operations via keyword operators
 python prime-square-sum.py --expr "verify 5 xor 3 == 6"
 python prime-square-sum.py --expr "verify 5 band 3 == 1"
 
 # Chained comparisons
-python prime-square-sum.py --expr "does_exist 1 < n < 10 and tri(n) == 28" --max-n 20
+python prime-square-sum.py --expr "does_exist 1 < n < 10 and tri(n) == 28" --max n:20
 
 # Context blocks for operator disambiguation
 python prime-square-sum.py --expr "verify bit[2^3] == 1"    # ^ is XOR in bit context
@@ -103,8 +126,8 @@ python prime-square-sum.py --expr "solve tri(36)"                    # 666
 python prime-square-sum.py --expr "tri(36)"                          # 666 (implicit)
 
 # Enumerate sequence values
-python prime-square-sum.py --expr "solve tri(n)" --max-n 10          # n=1: 1, n=2: 3, ...
-python prime-square-sum.py --expr "for_any primesum(n,2)" --max-n 7  # tabulate squared prime sums
+python prime-square-sum.py --expr "solve tri(n)" --max n:10          # n=1: 1, n=2: 3, ...
+python prime-square-sum.py --expr "for_any primesum(n,2)" --max n:7  # tabulate squared prime sums
 ```
 
 ### Verify Mode (v0.7.6+)

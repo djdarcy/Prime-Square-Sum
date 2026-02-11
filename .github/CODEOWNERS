@@ -1,0 +1,15 @@
+# Default owner for everything
+* @djdarcy
+
+# Python source
+*.py @djdarcy
+
+# Lean proofs
+proofs/ @djdarcy
+
+# Documentation
+docs/ @djdarcy
+*.md @djdarcy
+
+# GitHub configuration
+/.github/ @djdarcy

@@ -444,99 +444,36 @@ def trisum(b: int) -> int:
     if b == 1:
         return 0  # Only digit 0
 
-    # Find how many complete rows we can form with b digits
-    # Row k (1-indexed from bottom) has k digits
-    # Total digits in rows 1..r = tri(r)
-    # We need tri(r) <= b
-
-    # Find the number of complete rows
-    r = qtri(b - 1)  # b-1 because we have digits 0 to b-1
-    if r is None:
-        # b-1 is not triangular, find largest r where tri(r) <= b-1
-        r = 0
-        while tri(r + 1) <= b - 1:
-            r += 1
-
-    # Build the triangular arrangement
-    # Digits fill from bottom-left, going right, then up
-    # Bottom row (row 1) has 1 digit, row 2 has 2 digits, etc.
-    # But the pattern shows bottom row is longest...
-
-    # Re-reading the example:
-    #     9       (row 4, 1 digit: 9)
-    #    78       (row 3, 2 digits: 7,8)
-    #   456       (row 2, 3 digits: 4,5,6)
-    #  0123       (row 1, 4 digits: 0,1,2,3)
-    #
-    # So row 1 (bottom) has the most digits, row r (top) has 1 digit
-    # For b=10 digits (0-9), we have r=4 rows
-    # Row k has (r - k + 1) digits... no wait
-    # Row 1: 4 digits, Row 2: 3 digits, Row 3: 2 digits, Row 4: 1 digit
-    # So row k has (r - k + 1) digits from bottom up
-
-    # Total digits used = 4 + 3 + 2 + 1 = 10 = tri(4)
-    # So r = qtri(b) when b is triangular
-
-    # Actually let's compute directly:
-    # Find r such that tri(r) = b (if b is triangular) or tri(r) < b < tri(r+1)
-
-    # For b = 10: tri(4) = 10, so r = 4
-
-    # Simpler approach: compute directly
-    total = 0
-    digit = 0  # Current digit to place (0, 1, 2, ...)
-
-    # Find number of rows
+    # Find number of rows: largest r where tri(r) <= b
+    # For b=10: tri(4)=10, so r=4 rows
+    # Row sizes from bottom: r, r-1, ..., 2, 1
     num_rows = 1
-    while tri(num_rows) < b:
+    while tri(num_rows + 1) <= b:
         num_rows += 1
-    if tri(num_rows) > b:
-        num_rows -= 1
 
-    # Now num_rows is such that tri(num_rows) <= b
-    # But we may have extra digits that don't fit
-
-    # For exact triangular numbers, tri(num_rows) = b
-    digits_used = 0
-    row_values = []
-
-    for row in range(num_rows, 0, -1):
-        # Row 'row' has 'row' digits when counting from top
-        # But in our arrangement, bottom has most digits
-        # Row index from bottom: num_rows - row + 1 (has that many spaces)
-        # Actually, let me re-think...
-
-        # Looking at example again:
-        # Row 1 (bottom): 0123 - 4 digits, forms number 0123 = 123
-        # Row 2: 456 - 3 digits, forms number 456
-        # Row 3: 78 - 2 digits, forms number 78
-        # Row 4 (top): 9 - 1 digit, forms number 9
-
-        # So row k from bottom has (num_rows - k + 1) digits
-        pass
-
-    # Let me implement this more directly
-    # Digits 0 to b-1 arranged bottom to top, left to right
-    # Row sizes from bottom: num_rows, num_rows-1, ..., 2, 1
-
-    digits = list(range(b))  # [0, 1, 2, ..., b-1]
+    # Arrange digits 0..b-1 into rows, bottom to top, left to right
+    # Each row is interpreted as a base-b number (Horner evaluation)
+    #
+    # Example b=10, r=4:
+    #     9       = 9                        (1 digit)
+    #    78       = 7×10 + 8 = 78            (2 digits)
+    #   456       = 4×100 + 5×10 + 6 = 456  (3 digits)
+    #  0123       = 0×1000 + 1×100 + 2×10 + 3 = 123  (4 digits)
+    #
+    # Total: 123 + 456 + 78 + 9 = 666
     idx = 0
     total = 0
 
     for row_size in range(num_rows, 0, -1):
-        if idx >= len(digits):
+        if idx >= b:
             break
-        # Take row_size digits
-        row_digits = digits[idx:idx + row_size]
-        if len(row_digits) < row_size:
-            # Partial row - include if any digits
-            if row_digits:
-                row_value = int(''.join(map(str, row_digits)))
-                total += row_value
-            break
+        # Evaluate row digits as a base-b number using Horner's method
+        row_value = 0
+        for i in range(row_size):
+            if idx + i >= b:
+                break
+            row_value = row_value * b + (idx + i)
         idx += row_size
-        # Form number from these digits
-        row_value = int(''.join(map(str, row_digits)))
         total += row_value
 
     return total

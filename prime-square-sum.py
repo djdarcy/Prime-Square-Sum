@@ -51,6 +51,7 @@ from utils.grammar import (
 )
 from utils.function_registry import FunctionRegistry
 from utils.cli import (
+    ExpressionComponents,
     build_expression_from_args,
     build_bounds_from_args,
     build_iterator_factories_from_args,
@@ -58,6 +59,9 @@ from utils.cli import (
     format_no_match,
     # Issue #22: Configuration
     load_config,
+    # Issue #63: Dynamic help text
+    resolve_effective_defaults,
+    resolve_effective_bounds,
 )
 from utils.list_commands import handle_list
 from utils.sieve import (
@@ -71,21 +75,59 @@ from utils import gpu as gpu_utils
 # Argument Parser
 # =============================================================================
 
-def create_parser():
-    """Create argument parser with all CLI options."""
+_MAX_HELP_LEN = 80
+
+
+def _truncate_for_help(text: str) -> str:
+    """Truncate text for argparse help display, adding '...' if needed."""
+    if len(text) > _MAX_HELP_LEN:
+        return text[:_MAX_HELP_LEN - 3] + "..."
+    return text
+
+
+def create_parser(effective_defaults: ExpressionComponents = None,
+                   effective_bounds: dict = None):
+    """Create argument parser with all CLI options.
+
+    Args:
+        effective_defaults: Resolved default expression components for help text.
+            When None, uses hardcoded defaults. Caller typically passes
+            resolve_effective_defaults() to show the user's configured default.
+        effective_bounds: Resolved default bounds for help text examples.
+            When None, uses {'n': 1000000}. Caller typically passes
+            resolve_effective_bounds() to show the user's configured bounds.
+    """
+    if effective_defaults is None:
+        effective_defaults = ExpressionComponents()
+    if effective_bounds is None:
+        effective_bounds = {'n': 1000000}
+
+    # Build display strings for help text (Issue #63)
+    lhs_display = _truncate_for_help(effective_defaults.lhs)
+    rhs_for_example = effective_defaults.rhs or "666"
+    expr_example = _truncate_for_help(
+        f"{effective_defaults.quantifier} {effective_defaults.lhs} "
+        f"{effective_defaults.operator} {rhs_for_example}"
+    )
+
+    # Build max example from resolved bounds (prefer 'n' as the common case)
+    max_example_var = 'n' if 'n' in effective_bounds else next(iter(sorted(effective_bounds)), 'n')
+    max_example_val = effective_bounds.get(max_example_var, 1000000)
+    max_example = f"--max {max_example_var}:{max_example_val}"
+
     parser = argparse.ArgumentParser(
-        description='Mathematical expression evaluator for prime sequences',
+        description='Evaluate and search mathematical sequence relationships - built around the conjecture that prime p-th power sums equal triangular-base totals, extensible to arbitrary expressions.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Find n where sum of squared primes equals 666
   %(prog)s --expr "does_exist primesum(n,2) == 666"
 
-  # Same query using shorthand
+  # Same query using shorthand, when default "equations.json" is "does_exist primesum(n,2)"
   %(prog)s --target 666
 
   # Find where prime sums equal triangular numbers
-  %(prog)s --expr "for_any primesum(n,2) == tri(m)" --max-n 100 --max-m 50
+  %(prog)s --expr "for_any primesum(n,2) == tri(m)" --max n:100 --max m:50
 
   # Use cubed primes instead of squared
   %(prog)s --lhs "primesum(n,3)" --target 666
@@ -115,14 +157,14 @@ Comparison operators: ==, !=, <, >, <=, >=
     parser.add_argument(
         '--expr', '-e',
         metavar='EXPRESSION',
-        help='Full expression (e.g., "does_exist primesum(n,2) == 666")'
+        help=f'Full expression (e.g., "{expr_example}")'
     )
 
     # === Tier 2: Decomposed Flags ===
     parser.add_argument(
         '--lhs',
         metavar='EXPR',
-        help='Left-hand side expression (default: primesum(n,2))'
+        help=f'Left-hand side expression (default: {lhs_display})'
     )
     parser.add_argument(
         '--rhs', '--target', '-t',
@@ -131,85 +173,72 @@ Comparison operators: ==, !=, <, >, <=, >=
         help='Right-hand side value (required unless using --expr)'
     )
     parser.add_argument(
-        '--operator', '--op',
+        '--operator', '-op',
         metavar='OP',
         choices=['==', '!=', '<', '>', '<=', '>='],
-        help='Comparison operator (default: ==)'
+        help=f'Comparison operator (default: {effective_defaults.operator})'
     )
     parser.add_argument(
         '--quantifier', '-q',
         metavar='Q',
         choices=['does_exist', 'for_any'],
-        help='Quantifier (default: does_exist)'
+        help=f'Quantifier (default: {effective_defaults.quantifier})'
     )
 
     # === Tier 3: Saved Equations (Issue #21) ===
     parser.add_argument(
-        '--equation',
+        '--equation', "-eq",
         metavar='ID',
         help='Load saved equation by ID or name'
     )
-    parser.add_argument(
-        '--var',
+
+    # === Variable & Iterator Configuration (Issue #37, #62) ===
+    iter_group = parser.add_argument_group('variable & iteration options')
+    iter_group.add_argument(
+        '--var', '-var',
         action='append',
         metavar='NAME=VALUE',
         help='Set equation parameter (e.g., --var a=3 or --var a=3,b=4)'
     )
-
-    # === Variable Bounds ===
-    parser.add_argument(
-        '--max-n',
-        type=int,
-        default=1000000,
-        metavar='N',
-        help='Maximum value for variable n (default: 1000000)'
-    )
-    parser.add_argument(
-        '--max-m',
-        type=int,
-        default=10000,
-        metavar='M',
-        help='Maximum value for variable m (default: 10000)'
-    )
-
-    # === Iterator Configuration (Issue #37) ===
-    parser.add_argument(
+    iter_group.add_argument(
         '--iter-var',
         action='append',
         metavar='VAR:START:STOP[:STEP][:DTYPE]',
         help='Define iterator for variable (e.g., n:1:1000:2:uint64)'
     )
-    parser.add_argument(
+    iter_group.add_argument(
+        '--min', '-min', '--iter-start',
+        dest='iter_start',
+        action='append',
+        metavar='VAR:VALUE',
+        help='Set minimum (start) value for variable (e.g., --min n:50000000)'
+    )
+    iter_group.add_argument(
+        '--max', '-max', '--iter-stop',
+        dest='iter_stop',
+        action='append',
+        metavar='VAR:VALUE',
+        help=f'Set maximum (stop) value for variable (e.g., {max_example})'
+    )
+    iter_group.add_argument(
         '--iter-type',
         action='append',
         metavar='VAR:TYPE',
         help='Set iterator type for variable (int or float)'
     )
-    parser.add_argument(
-        '--iter-start',
-        action='append',
-        metavar='VAR:VALUE',
-        help='Set iterator start value for variable'
-    )
-    parser.add_argument(
-        '--iter-stop',
-        action='append',
-        metavar='VAR:VALUE',
-        help='Set iterator stop value for variable'
-    )
-    parser.add_argument(
+    iter_group.add_argument(
         '--iter-step',
         action='append',
         metavar='VAR:VALUE',
         help='Set iterator step for variable'
     )
-    parser.add_argument(
+    iter_group.add_argument(
         '--iter-num-steps',
         action='append',
         metavar='VAR:COUNT',
         help='Set number of steps for float iterator (linspace-style)'
     )
-    parser.add_argument(
+    iter_group.add_argument(
         '--iter-dtype',
         action='append',
         metavar='VAR:DTYPE',
@@ -218,7 +247,7 @@ Comparison operators: ==, !=, <, >, <=, >=
 
     # === Output Control ===
     parser.add_argument(
-        '--format', '-f',
+        '--format', '-fmt',
         choices=['text', 'json', 'csv'],
         default='text',
         help='Output format (default: text)'
@@ -235,7 +264,7 @@ Comparison operators: ==, !=, <, >, <=, >=
         help='Suppress all non-error output (hints, progress, timing)'
     )
     parser.add_argument(
-        '--limit',
+        '--limit', "-lim", 
         type=int,
         metavar='N',
         help='Maximum number of results for enumeration (for_any/solve)'
@@ -261,25 +290,24 @@ Comparison operators: ==, !=, <, >, <=, >=
         help='Load user-defined functions from Python file'
     )
 
-    # === GPU Control ===
-    parser.add_argument(
+    # === Algorithm & Performance (Issue #29) ===
+    perf_group = parser.add_argument_group('algorithm & performance options')
+    perf_group.add_argument(
         '--no-gpu',
         action='store_true',
         help='Disable GPU acceleration'
     )
-
-    # === Algorithm Selection (Issue #29) ===
-    parser.add_argument(
+    perf_group.add_argument(
         '--algorithm',
         metavar='CLASS:VARIANT',
         help='Algorithm selection (e.g., sieve:segmented, sieve:basic, sieve:individual)'
     )
-    parser.add_argument(
+    perf_group.add_argument(
         '--prefer',
         choices=['cpu', 'gpu', 'memory', 'minimal'],
         help='Resource preference hint for auto-selection'
     )
-    parser.add_argument(
+    perf_group.add_argument(
         '--max-memory',
         type=int,
         metavar='MB',
@@ -288,7 +316,7 @@ Comparison operators: ==, !=, <, >, <=, >=
 
     # === Version ===
     parser.add_argument(
-        '--version',
+        '--version', '-V',
         action='version',
         version=f'%(prog)s {__version__}'
     )
@@ -359,7 +387,7 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
         }
         if default_bounds:
             bound_str = ', '.join(f'{v}={val:,}' for v, val in default_bounds.items())
-            flag_str = ', '.join(f'--max-{v}' for v in default_bounds)
+            flag_str = ', '.join(f'--max {v}:VALUE' for v in default_bounds)
             out.hint('bounds.implicit_defaults', 'verbose',
                      bounds=bound_str, flags=flag_str)
 
@@ -436,17 +464,17 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
 
 def _has_explicit_bound(args, var_name: str) -> bool:
     """Check if a variable's bound was explicitly set via CLI flags."""
-    # Check --max-{var} style flags
-    attr = f'max_{var_name}'
-    if hasattr(args, attr):
-        # argparse sets defaults; check if user provided it
-        # Default values: n=1000000, m=10000
-        defaults = {'max_n': 1000000, 'max_m': 10000}
-        val = getattr(args, attr)
-        if attr in defaults and val == defaults[attr]:
-            return False  # Still at default
-        return True
-    # Check --iter-var overrides
+    # Check --max / --iter-stop
+    if args.iter_stop:
+        for spec in args.iter_stop:
+            if spec.startswith(f'{var_name}:'):
+                return True
+    # Check --min / --iter-start
+    if args.iter_start:
+        for spec in args.iter_start:
+            if spec.startswith(f'{var_name}:'):
+                return True
+    # Check --iter-var compact syntax
     if args.iter_var:
         for spec in args.iter_var:
             if spec.startswith(f'{var_name}:'):
@@ -482,7 +510,10 @@ def parse_algorithm_arg(algo_str: str) -> tuple:
 
 
 def main():
-    parser = create_parser()
+    parser = create_parser(
+        effective_defaults=resolve_effective_defaults(),
+        effective_bounds=resolve_effective_bounds(),
+    )
     args = parser.parse_args()
 
     # Initialize output manager (#31, #57)

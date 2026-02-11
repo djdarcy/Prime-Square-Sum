@@ -918,7 +918,7 @@ def find_matches(
     missing = free_vars - covered_vars
     if missing:
         missing_list = sorted(missing)
-        suggestions = ', '.join(f'--max-{v}' for v in missing_list)
+        suggestions = ', '.join(f'--max {v}:VALUE' for v in missing_list)
         raise ValueError(
             f"Missing bounds for variable(s): {', '.join(missing_list)}. "
             f"Use {suggestions} to specify."
