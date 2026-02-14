@@ -613,8 +613,11 @@ class ExpressionEvaluator:
         result = evaluator.evaluate(ast.body, {'n': 7})
     """
 
-    def __init__(self, registry: FunctionRegistry):
+    def __init__(self, registry: FunctionRegistry, capture_values: bool = False):
         self.registry = registry
+        self.capture_values = capture_values
+        self._last_comparison_values: Optional[List[Any]] = None
+        self._last_comparison_operators: Optional[List[str]] = None
 
     def evaluate(self, node: ASTNode, context: Dict[str, Any]) -> Any:
         """
@@ -687,8 +690,14 @@ class ExpressionEvaluator:
             for i, op in enumerate(node.operators):
                 next_val = self.evaluate(node.operands[i + 1], context)
                 if not self._compare(values[-1], op, next_val):
+                    self._last_comparison_values = None
+                    self._last_comparison_operators = None
                     return False
                 values.append(next_val)
+            # Store comparison values for vals channel capture
+            if self.capture_values:
+                self._last_comparison_values = values
+                self._last_comparison_operators = node.operators
             return True
 
         elif isinstance(node, ContextBlock):
@@ -786,7 +795,8 @@ def find_matches(
     expr: Expression,
     evaluator: ExpressionEvaluator,
     bounds: Dict[str, int],
-    iterator_factories: Optional[Dict[str, Callable[[], SequenceIterator]]] = None
+    iterator_factories: Optional[Dict[str, Callable[[], SequenceIterator]]] = None,
+    capture_values: bool = False,
 ) -> Iterator[Dict[str, Any]]:
     """
     Find all variable assignments that satisfy the expression.
@@ -968,7 +978,12 @@ def find_matches(
         context = dict(zip(var_list, values))
         try:
             if evaluator.evaluate(expr.body, context):
-                yield context.copy()
+                result = context.copy()
+                # Attach captured comparison values if available
+                if capture_values and evaluator._last_comparison_values is not None:
+                    result['__vals__'] = evaluator._last_comparison_values
+                    result['__ops__'] = evaluator._last_comparison_operators
+                yield result
                 if quantifier in ("does_exist", "solve"):
                     return  # Stop at first match
             functions_validated = True  # If we got here, functions are valid

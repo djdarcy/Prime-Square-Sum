@@ -291,12 +291,12 @@ class TestSingleton:
 
     def test_get_output_creates_default(self):
         """get_output creates a default manager if none initialized."""
-        import utils.output as mod
-        old = mod._manager
+        import utils.log_lib.manager as mgr_mod
+        old = mgr_mod._manager
         try:
-            mod._manager = None
+            mgr_mod._manager = None
             mgr = get_output()
             assert isinstance(mgr, OutputManager)
             assert mgr.verbosity == 0
         finally:
-            mod._manager = old
+            mgr_mod._manager = old

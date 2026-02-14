@@ -260,8 +260,16 @@ Comparison operators: ==, !=, <, >, <=, >=
     )
     parser.add_argument(
         '--quiet', '-Q',
-        action='store_true',
-        help='Suppress all non-error output (hints, progress, timing)'
+        action='count',
+        default=0,
+        help='Decrease verbosity (-Q=no hints, -QQ=no progress, -QQQ=errors only, -QQQQ=silent)'
+    )
+    parser.add_argument(
+        '--show',
+        nargs='?',
+        action='append',
+        metavar='CHANNEL[:LEVEL]',
+        help='Enable/configure output channel (bare --show lists channels)'
     )
     parser.add_argument(
         '--limit', "-lim", 
@@ -362,7 +370,8 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
         return 1
 
     # Create evaluator
-    evaluator = ExpressionEvaluator(registry)
+    evaluator = ExpressionEvaluator(registry,
+                                    capture_values=out.channel_active('vals'))
 
     # Build bounds
     bounds = build_bounds_from_args(args, expr_str)
@@ -408,7 +417,8 @@ def handle_expression(args, registry: FunctionRegistry, config=None) -> int:
     limit = getattr(args, 'limit', None)
 
     try:
-        for match in find_matches(ast, evaluator, bounds, iterator_factories):
+        for match in find_matches(ast, evaluator, bounds, iterator_factories,
+                                  capture_values=out.channel_active('vals')):
             found_any = True
             match_count += 1
             print(format_match(match, args.format))
@@ -516,11 +526,17 @@ def main():
     )
     args = parser.parse_args()
 
-    # Initialize output manager (#31, #57)
-    out = init_output(
-        verbosity=args.verbose if not args.quiet else 0,
-        quiet=args.quiet,
-    )
+    # Initialize output manager (#31, #57, #65 THAC0 model)
+    # Handle bare --show (list channels)
+    if args.show and None in args.show:
+        from utils.log_lib.channels import format_channel_list
+        print(format_channel_list())
+        return 0
+
+    # THAC0: verbosity = verbose_count - quiet_count
+    verbosity = (args.verbose or 0) - (args.quiet or 0)
+    channels = [s for s in (args.show or []) if s is not None]
+    out = init_output(verbosity=verbosity, channels=channels)
 
     # Load config for algorithm defaults (Issue #29)
     # Precedence: CLI > config.json > auto-detection

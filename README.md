@@ -80,7 +80,7 @@ python prime-square-sum.py --expr "does_exist primesum(n,p) == trisum(666)" \
     --algorithm sieve:primesieve -min n:50000000 -max n:1000000000 --max p:5
 ```
 
-This search requires billions of prime sums and benefits from `--algorithm sieve:primesieve` (C++ [primesieve](https://github.com/kimwalisch/primesieve) library via conda). See [Installation](#recommended-conda) for setup. The answer to this question would establish whether the chain `primesum(3,1) → stf(10) → primesum(7,2) → stf(666) → primesum(?,?)` continues — and whether it may continue indefinitely. The formal [proofs](proofs/README.md) provide the algebraic framework (closed-form `stf(b)`, verified in Lean 4), while the numerical search here would supply the concrete witness needed for induction.
+This search requires billions of prime sums and benefits from `--algorithm sieve:primesieve` (C++ [primesieve](https://github.com/kimwalisch/primesieve) library via conda). See [Installation](#recommended-conda) for setup. The answer to this question would establish whether the chain `primesum(3,1)=10 → stf(primesum(3,1))=666 → primesum(7,2)=666 → stf(stf(primesum(3,1))) → primesum(?,?)`, or perhaps easier to see `primesum(3,1) → stf(10) → primesum(7,2) → stf(666) → primesum(?,?)`, continues — and whether it may continue indefinitely. The formal [proofs](proofs/README.md) provide the algebraic framework (closed-form `stf(b)`, verified in Lean 4), while the numerical search here would supply the concrete witness needed for induction.
 
 ### Arithmetic Expressions (v0.7.12+)
 

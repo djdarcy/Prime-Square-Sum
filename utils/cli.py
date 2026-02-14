@@ -1247,17 +1247,36 @@ def format_match(match: Dict[str, Any], format_type: str = "text") -> str:
             return f"{vars_str}: {value}"
 
     # Standard match result (comparison-based search)
+    # Extract vals annotation if present
+    vals = match.get("__vals__")
+    ops = match.get("__ops__")
+    var_items = sorted((k, v) for k, v in match.items() if not k.startswith("__"))
+
     if format_type == "json":
-        return json.dumps({"found": True, "variables": match})
+        result = {"found": True, "variables": {k: v for k, v in var_items}}
+        if vals is not None:
+            result["values"] = vals
+        return json.dumps(result)
     elif format_type == "csv":
-        if not match:
+        if not var_items:
             return "found"
-        keys = sorted(match.keys())
-        return ",".join(f"{k}={match[k]}" for k in keys)
+        line = ",".join(f"{k}={v}" for k, v in var_items)
+        if vals is not None:
+            line += "," + ",".join(str(v) for v in vals)
+        return line
     else:  # text
-        if not match:
-            return "Found: (no variables)"
-        return "Found: " + ", ".join(f"{k}={v}" for k, v in sorted(match.items()))
+        if not var_items:
+            base = "Found: (no variables)"
+        else:
+            base = "Found: " + ", ".join(f"{k}={v}" for k, v in var_items)
+        if vals is not None and ops is not None:
+            # Format: [666 == 666] or [1 < 5 < 10]
+            parts = [str(vals[0])]
+            for i, op in enumerate(ops):
+                parts.append(op)
+                parts.append(str(vals[i + 1]))
+            base += "  [" + " ".join(parts) + "]"
+        return base
 
 
 def format_no_match(format_type: str = "text") -> str:
